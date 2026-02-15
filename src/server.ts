@@ -19,6 +19,8 @@ import { RateLimiterMemory } from 'rate-limiter-flexible';
 import authRoutes from './routes/auth';
 import messageRoutes from './routes/messages';
 import walletRoutes, { setMasterXpub } from './routes/wallet';
+import adminRoutes from './routes/admin';
+import supportRoutes from './routes/support';
 import { createBot } from './bot';
 import { createWSServer } from './ws';
 import {
@@ -75,6 +77,8 @@ async function main() {
   app.use('/api/auth', authRoutes);
   app.use('/api/messages', messageRoutes);
   app.use('/api/wallet', walletRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/support', supportRoutes);
 
   // Health check
   app.get('/health', (_req, res) => {

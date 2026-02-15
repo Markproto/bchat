@@ -23,10 +23,46 @@ CREATE TABLE IF NOT EXISTS users (
     -- X25519 public key for E2EE messaging (hex)
     encryption_pubkey TEXT,
 
-    -- Status
+    -- Role & admin chain of trust
+    role            TEXT NOT NULL DEFAULT 'user', -- creator, admin, user
+    verified_by     UUID REFERENCES users(id),   -- which admin verified this user/admin
+    admin_signature TEXT,                         -- creator/admin signs this user's pubkey to prove legitimacy
     is_verified     BOOLEAN DEFAULT FALSE,
     is_active       BOOLEAN DEFAULT TRUE,
 
+    -- Phone number (future: secondary verification)
+    phone_number    TEXT,
+    phone_verified  BOOLEAN DEFAULT FALSE,
+
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Admin verification chain: who promoted whom, with cryptographic proof
+CREATE TABLE IF NOT EXISTS admin_chain (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id        UUID NOT NULL REFERENCES users(id),
+    promoted_by     UUID NOT NULL REFERENCES users(id),
+
+    -- The promoter signs the new admin's identity pubkey
+    -- This creates an unforgeable chain: creator -> admin -> admin
+    signature       TEXT NOT NULL,  -- ed25519 sig of (admin_id || admin_pubkey || role || timestamp)
+    signed_payload  TEXT NOT NULL,  -- the exact payload that was signed (for verification)
+
+    role_granted    TEXT NOT NULL DEFAULT 'admin',
+    granted_at      TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at      TIMESTAMPTZ,
+    is_active       BOOLEAN DEFAULT TRUE
+);
+
+-- Support tickets: in-app only, users NEVER get support via Telegram DMs
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+    assigned_admin  UUID REFERENCES users(id),
+    conversation_id UUID REFERENCES conversations(id),
+    status          TEXT NOT NULL DEFAULT 'open', -- open, assigned, resolved, closed
+    subject         TEXT,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -132,3 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_members_user_id ON conversation_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_challenges_user_id ON challenges(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_admin_chain_admin_id ON admin_chain(admin_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_user_id ON support_tickets(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_admin ON support_tickets(assigned_admin, status);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
