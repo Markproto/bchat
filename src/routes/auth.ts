@@ -18,6 +18,8 @@ import { ChallengeStore, verifySignedChallenge, generateIdentityKeyPair } from '
 import { getJoinEvent } from '../bot';
 import { query } from '../db';
 import { checkNameImpersonation } from '../admin/identity-guard';
+import { checkDeviceBan, checkSybil, recordRegistrationSignals, DeviceSignals } from '../auth/device-ban';
+import { recordInviteChain } from '../admin/invite-accountability';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
@@ -29,7 +31,7 @@ const challengeStore = new ChallengeStore();
  */
 router.post('/telegram', async (req: Request, res: Response) => {
   try {
-    const { initData, deviceInfo } = req.body;
+    const { initData, deviceInfo, inviteCode } = req.body;
     if (!initData) {
       return res.status(400).json({ error: 'Missing initData' });
     }
@@ -42,7 +44,39 @@ router.post('/telegram', async (req: Request, res: Response) => {
     // Step 1: Verify HMAC-SHA256 signature
     const telegramData = verifyTelegramWebAppData(initData, botToken);
 
-    // Step 2: Match against bot join events (anti-impersonation)
+    // Step 2: Check DEVICE BAN before anything else.
+    // This is the key defense — even with a brand new Telegram account,
+    // a banned phone can't register. New SIM doesn't help.
+    const signals: DeviceSignals = {
+      platform: deviceInfo?.platform || 'unknown',
+      model: deviceInfo?.model,
+      osVersion: deviceInfo?.osVersion,
+      appVersion: deviceInfo?.appVersion || '0.1.0',
+      hardwareId: deviceInfo?.hardwareId,   // Secure Enclave / StrongBox key
+      screenRes: deviceInfo?.screenRes,
+      timezone: deviceInfo?.timezone,
+      language: deviceInfo?.language,
+      canvasHash: deviceInfo?.canvasHash,
+      webglHash: deviceInfo?.webglHash,
+    };
+
+    const banCheck = await checkDeviceBan(signals, req.ip || undefined);
+    if (banCheck.banned) {
+      // Log the blocked attempt (even though we don't have a user yet)
+      await query(
+        `INSERT INTO audit_log (event_type, details, ip_address)
+         VALUES ($1, $2, $3)`,
+        ['banned_device_attempt', JSON.stringify({
+          telegramId: telegramData.user.id,
+          matchType: banCheck.matchType,
+        }), req.ip]
+      );
+      return res.status(403).json({
+        error: banCheck.reason || 'This device has been banned.',
+      });
+    }
+
+    // Step 3: Match against bot join events
     const joinEvent = getJoinEvent(telegramData.user.id);
     if (!joinEvent) {
       return res.status(403).json({
@@ -50,7 +84,7 @@ router.post('/telegram', async (req: Request, res: Response) => {
       });
     }
 
-    // Step 3: Check if user already exists
+    // Step 4: Check if user already exists
     const existing = await query(
       'SELECT * FROM users WHERE telegram_id = $1',
       [telegramData.user.id]
@@ -58,16 +92,35 @@ router.post('/telegram', async (req: Request, res: Response) => {
 
     let userId: string;
     let isNewUser = false;
+    let sybilWarning: string | undefined;
 
     if (existing.rows.length > 0) {
       userId = existing.rows[0].id;
+
+      // Check if this existing account is active
+      if (!existing.rows[0].is_active) {
+        return res.status(403).json({ error: 'This account has been suspended.' });
+      }
+
       // Update last login info
       await query(
         'UPDATE users SET telegram_username = $1, updated_at = NOW() WHERE id = $2',
         [telegramData.user.username, userId]
       );
     } else {
-      // Step 4: Check if display name impersonates an admin
+      // Step 5: Sybil detection — is this the same device with a new Telegram account?
+      const sybilCheck = await checkSybil(signals, req.ip || undefined);
+      if (sybilCheck.suspicious && sybilCheck.matchedAccounts >= 2) {
+        // Hard block — too many accounts from this device
+        return res.status(403).json({
+          error: 'Multiple accounts detected from this device. Contact support if this is an error.',
+        });
+      } else if (sybilCheck.suspicious) {
+        // Soft flag — allow but warn admins
+        sybilWarning = sybilCheck.reason;
+      }
+
+      // Step 6: Check if display name impersonates an admin
       const nameCheck = await checkNameImpersonation(telegramData.user.first_name);
       if (nameCheck.impersonating && nameCheck.targetAdmin) {
         return res.status(403).json({
@@ -75,7 +128,7 @@ router.post('/telegram', async (req: Request, res: Response) => {
         });
       }
 
-      // Step 5: Create new user with ed25519 identity keypair
+      // Step 7: Create new user with ed25519 identity keypair
       const identityKey = await generateIdentityKeyPair();
       userId = uuidv4();
       isNewUser = true;
@@ -93,15 +146,37 @@ router.post('/telegram', async (req: Request, res: Response) => {
         ]
       );
 
-      // Log audit event
+      // Step 8: Record device signals for future ban matching
+      await recordRegistrationSignals(userId, signals, req.ip || undefined);
+
+      // Step 9: Record invite chain if an invite code was provided
+      if (inviteCode) {
+        const invite = await query(
+          'SELECT created_by FROM invites WHERE code = $1 AND used_by IS NULL',
+          [inviteCode]
+        );
+        if (invite.rows[0]?.created_by) {
+          await recordInviteChain(invite.rows[0].created_by, userId, inviteCode);
+          await query(
+            'UPDATE invites SET used_by = $1, used_at = NOW() WHERE code = $2',
+            [userId, inviteCode]
+          );
+        }
+      }
+
+      // Audit
       await query(
         `INSERT INTO audit_log (user_id, event_type, details, ip_address)
          VALUES ($1, $2, $3, $4)`,
-        [userId, 'user_created', JSON.stringify({ telegramId: telegramData.user.id }), req.ip]
+        [userId, 'user_created', JSON.stringify({
+          telegramId: telegramData.user.id,
+          sybilWarning: sybilWarning || null,
+          inviteCode: inviteCode || null,
+        }), req.ip]
       );
     }
 
-    // Step 5: Bind device
+    // Step 10: Bind device
     const deviceId = generateDeviceId();
     const fingerprint = createDeviceFingerprint(deviceInfo || {
       platform: 'unknown',

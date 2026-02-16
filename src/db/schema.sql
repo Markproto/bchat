@@ -160,6 +160,57 @@ CREATE TABLE IF NOT EXISTS audit_log (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Device bans: ban the HARDWARE, not just the account.
+-- A new Telegram account on the same phone still hits this ban.
+CREATE TABLE IF NOT EXISTS device_bans (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    fingerprint     TEXT NOT NULL,        -- device hardware fingerprint (SHA-256 of hardware signals)
+    hardware_id     TEXT,                 -- Secure Enclave / StrongBox key hash (strongest signal)
+    ip_hash         TEXT,                 -- hashed IP (privacy-preserving, for correlation)
+    banned_user_id  UUID REFERENCES users(id), -- the account that caused the ban
+    banned_by       UUID REFERENCES users(id), -- admin who issued the ban
+    reason          TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ,          -- null = permanent
+    is_active       BOOLEAN DEFAULT TRUE
+);
+
+-- Invite chain: tracks who invited whom for accountability.
+-- If user X keeps inviting bad actors, X loses invite privileges.
+CREATE TABLE IF NOT EXISTS invite_chain (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    inviter_id      UUID NOT NULL REFERENCES users(id),
+    invitee_id      UUID NOT NULL REFERENCES users(id),
+    invite_code     TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Inviter reputation: tracks trust score for invite privileges
+CREATE TABLE IF NOT EXISTS inviter_reputation (
+    user_id         UUID PRIMARY KEY REFERENCES users(id),
+    invites_sent    INTEGER DEFAULT 0,
+    invites_banned  INTEGER DEFAULT 0,    -- how many of their invitees got banned
+    trust_score     REAL DEFAULT 1.0,     -- 0.0 = untrusted, 1.0 = fully trusted
+    can_invite      BOOLEAN DEFAULT TRUE, -- revoked if too many bad invites
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Registration signals: collected at signup for device-level identity.
+-- Even if they make a new Telegram account, these signals persist.
+CREATE TABLE IF NOT EXISTS registration_signals (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+    fingerprint     TEXT NOT NULL,
+    hardware_id     TEXT,                 -- hardware-bound key (strongest)
+    screen_res      TEXT,                 -- screen resolution
+    timezone        TEXT,                 -- timezone offset
+    language        TEXT,                 -- device language
+    ip_hash         TEXT,                 -- hashed IP at registration
+    canvas_hash     TEXT,                 -- canvas fingerprint (web)
+    webgl_hash      TEXT,                 -- WebGL renderer hash (web)
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);
@@ -172,3 +223,10 @@ CREATE INDEX IF NOT EXISTS idx_admin_chain_admin_id ON admin_chain(admin_id, is_
 CREATE INDEX IF NOT EXISTS idx_support_tickets_user_id ON support_tickets(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_admin ON support_tickets(assigned_admin, status);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_device_bans_fingerprint ON device_bans(fingerprint, is_active);
+CREATE INDEX IF NOT EXISTS idx_device_bans_hardware ON device_bans(hardware_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_invite_chain_inviter ON invite_chain(inviter_id);
+CREATE INDEX IF NOT EXISTS idx_invite_chain_invitee ON invite_chain(invitee_id);
+CREATE INDEX IF NOT EXISTS idx_registration_signals_fingerprint ON registration_signals(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_registration_signals_hardware ON registration_signals(hardware_id);
+CREATE INDEX IF NOT EXISTS idx_registration_signals_ip ON registration_signals(ip_hash);

@@ -18,6 +18,8 @@ import {
   getCreatorPubkey,
   initializeCreator,
 } from '../admin/verification';
+import { banDevice } from '../auth/device-ban';
+import { penalizeInviteChain, canUserInvite, getInviteTree } from '../admin/invite-accountability';
 import { query } from '../db';
 
 const router = Router();
@@ -214,6 +216,72 @@ router.get('/list', requireAuth, async (req: Request, res: Response) => {
     res.json({
       admins: admins.rows,
       creatorPubkey: await getCreatorPubkey(),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/ban
+ * Ban a user AND their device. Even if they get a new Telegram account
+ * on the same phone, the hardware fingerprint blocks re-registration.
+ */
+router.post('/ban', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const adminId = (req as any).userId;
+
+    // Verify caller is admin
+    const admin = await query('SELECT role FROM users WHERE id = $1', [adminId]);
+    if (admin.rows[0]?.role !== 'creator' && admin.rows[0]?.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can ban users' });
+    }
+
+    const { targetUserId, reason, durationDays } = req.body;
+    if (!targetUserId || !reason) {
+      return res.status(400).json({ error: 'targetUserId and reason required' });
+    }
+
+    // Can't ban other admins (only creator can)
+    const target = await query('SELECT role FROM users WHERE id = $1', [targetUserId]);
+    if (target.rows[0]?.role === 'admin' && admin.rows[0]?.role !== 'creator') {
+      return res.status(403).json({ error: 'Only the creator can ban admins' });
+    }
+    if (target.rows[0]?.role === 'creator') {
+      return res.status(403).json({ error: 'Cannot ban the creator' });
+    }
+
+    // Ban the device (not just the account)
+    await banDevice(targetUserId, adminId, reason, durationDays);
+
+    // Penalize whoever invited this bad actor
+    const penalties = await penalizeInviteChain(targetUserId);
+
+    res.json({
+      success: true,
+      message: `User ${targetUserId} banned. Device hardware fingerprint blocked.`,
+      duration: durationDays ? `${durationDays} days` : 'permanent',
+      inviteChainPenalties: penalties.penalized,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/invite-status/:userId
+ * Check a user's invite privileges and reputation.
+ */
+router.get('/invite-status/:userId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const status = await canUserInvite(req.params.userId);
+    const tree = await getInviteTree(req.params.userId);
+
+    res.json({
+      ...status,
+      invitedBy: tree.invitedBy,
+      inviteeCount: tree.invitees.length,
+      inviteesBanned: tree.invitees.filter(i => i.bannedStatus).length,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
