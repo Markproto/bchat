@@ -23,7 +23,7 @@ import { recordInviteChain } from '../admin/invite-accountability';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
-const challengeStore = new ChallengeStore();
+const challengeStore = new ChallengeStore(query);
 
 /**
  * POST /api/auth/telegram
@@ -293,7 +293,7 @@ router.post('/challenge', async (req: Request, res: Response) => {
 
     verifyToken(token);
     const { purpose } = req.body;
-    const challenge = challengeStore.issue(purpose || 'identity_verify');
+    const challenge = await challengeStore.issue(purpose || 'identity_verify');
 
     res.json({
       challengeId: challenge.id,
@@ -318,7 +318,7 @@ router.post('/challenge/verify', async (req: Request, res: Response) => {
     const { challengeId, signature, publicKey } = req.body;
 
     // Consume challenge (prevents replay)
-    const challenge = challengeStore.consume(challengeId);
+    const challenge = await challengeStore.consume(challengeId);
     if (!challenge) {
       return res.status(400).json({ error: 'Invalid or expired challenge' });
     }
