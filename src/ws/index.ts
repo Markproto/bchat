@@ -14,6 +14,9 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { verifyToken, TokenPayload } from '../auth/jwt';
+import { verifyAdmin } from '../admin/verification';
+import { generatePubkeyFingerprint } from '../admin/identity-guard';
+import { query } from '../db';
 import { URL } from 'url';
 
 interface AuthenticatedSocket extends WebSocket {
@@ -129,26 +132,33 @@ export function createWSServer(port: number): WebSocketServer {
 function handleMessage(socket: AuthenticatedSocket, msg: WSMessage) {
   switch (msg.type) {
     case 'message': {
-      // Relay encrypted message to recipient(s)
+      // Relay encrypted message to recipient(s) with sender's identity badge
       const { conversationId, recipientIds, ciphertext, nonce, contentType } = msg.payload as any;
 
       if (!recipientIds || !Array.isArray(recipientIds)) return;
 
-      const outgoing = JSON.stringify({
-        type: 'message',
-        payload: {
-          conversationId,
-          senderId: socket.userId,
-          ciphertext,
-          nonce,
-          contentType: contentType || 'text',
-          timestamp: Date.now(),
-        },
-      });
+      // Attach sender's verified identity to every message automatically.
+      // Recipients don't have to manually verify — the badge is computed
+      // server-side from the crypto chain and included with the message.
+      getSenderBadge(socket.userId).then(badge => {
+        const outgoing = JSON.stringify({
+          type: 'message',
+          payload: {
+            conversationId,
+            senderId: socket.userId,
+            ciphertext,
+            nonce,
+            contentType: contentType || 'text',
+            timestamp: Date.now(),
+            // Identity info attached to every message — unforgeable
+            senderBadge: badge,
+          },
+        });
 
-      for (const recipientId of recipientIds) {
-        sendToUser(recipientId as string, outgoing);
-      }
+        for (const recipientId of recipientIds) {
+          sendToUser(recipientId as string, outgoing);
+        }
+      });
       break;
     }
 
@@ -205,6 +215,37 @@ function sendToUser(userId: string, message: string) {
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(message);
     }
+  }
+}
+
+/**
+ * Get the sender's verified badge info — attached to every message.
+ * This is what prevents profile cloning from working:
+ *   - Badge is computed from the admin chain (not a profile setting)
+ *   - Fingerprint is derived from the sender's unique pubkey
+ *   - A scammer who copies a name/photo will have no badge and a different fingerprint
+ */
+async function getSenderBadge(userId: string): Promise<{
+  role: string | null;
+  chainVerified: boolean;
+  fingerprint: string | null;
+}> {
+  try {
+    const verification = await verifyAdmin(userId);
+    const user = await query(
+      'SELECT identity_pubkey FROM users WHERE id = $1',
+      [userId]
+    );
+
+    return {
+      role: verification.isAdmin ? verification.role : null,
+      chainVerified: verification.isAdmin,
+      fingerprint: user.rows[0]
+        ? generatePubkeyFingerprint(user.rows[0].identity_pubkey)
+        : null,
+    };
+  } catch {
+    return { role: null, chainVerified: false, fingerprint: null };
   }
 }
 

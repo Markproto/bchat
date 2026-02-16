@@ -21,6 +21,7 @@ import messageRoutes from './routes/messages';
 import walletRoutes, { setMasterXpub } from './routes/wallet';
 import adminRoutes from './routes/admin';
 import supportRoutes from './routes/support';
+import identityRoutes from './routes/identity';
 import { createBot } from './bot';
 import { createWSServer } from './ws';
 import {
@@ -79,6 +80,7 @@ async function main() {
   app.use('/api/wallet', walletRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/support', supportRoutes);
+  app.use('/api/identity', identityRoutes);
 
   // Health check
   app.get('/health', (_req, res) => {

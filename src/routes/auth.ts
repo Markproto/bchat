@@ -17,6 +17,7 @@ import { generateDeviceId, createDeviceFingerprint } from '../auth/device';
 import { ChallengeStore, verifySignedChallenge, generateIdentityKeyPair } from '../crypto/challenge';
 import { getJoinEvent } from '../bot';
 import { query } from '../db';
+import { checkNameImpersonation } from '../admin/identity-guard';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
@@ -66,7 +67,15 @@ router.post('/telegram', async (req: Request, res: Response) => {
         [telegramData.user.username, userId]
       );
     } else {
-      // Step 4: Create new user with ed25519 identity keypair
+      // Step 4: Check if display name impersonates an admin
+      const nameCheck = await checkNameImpersonation(telegramData.user.first_name);
+      if (nameCheck.impersonating && nameCheck.targetAdmin) {
+        return res.status(403).json({
+          error: `Display name "${telegramData.user.first_name}" is too similar to ${nameCheck.targetAdmin.role} "${nameCheck.targetAdmin.name}". Change your Telegram display name and try again.`,
+        });
+      }
+
+      // Step 5: Create new user with ed25519 identity keypair
       const identityKey = await generateIdentityKeyPair();
       userId = uuidv4();
       isNewUser = true;
