@@ -1,6 +1,10 @@
 -- bchat Database Schema
 -- PostgreSQL 15+
 
+-- PG15+ revoked default CREATE on public schema for non-owner roles.
+-- Ensure the current user can create objects. Safe no-op if already granted.
+GRANT ALL ON SCHEMA public TO CURRENT_USER;
+
 -- Users: core identity table
 CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -55,6 +59,35 @@ CREATE TABLE IF NOT EXISTS admin_chain (
     is_active       BOOLEAN DEFAULT TRUE
 );
 
+-- Conversations: direct messages and groups
+-- (must be created before support_tickets which references it)
+CREATE TABLE IF NOT EXISTS conversations (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type            TEXT NOT NULL DEFAULT 'direct', -- direct, group
+    name            TEXT,  -- for groups
+
+    -- Group encryption key (sealed per-member, not stored in plaintext)
+    -- Null for direct conversations (use pairwise DH)
+    group_key_version INTEGER DEFAULT 0,
+
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Conversation members
+CREATE TABLE IF NOT EXISTS conversation_members (
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    -- Sealed group key for this member (hex, encrypted with member's X25519 pubkey)
+    encrypted_group_key TEXT,
+
+    role            TEXT NOT NULL DEFAULT 'member', -- admin, member
+    joined_at       TIMESTAMPTZ DEFAULT NOW(),
+
+    PRIMARY KEY (conversation_id, user_id)
+);
+
 -- Support tickets: in-app only, users NEVER get support via Telegram DMs
 CREATE TABLE IF NOT EXISTS support_tickets (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -101,34 +134,6 @@ CREATE TABLE IF NOT EXISTS challenges (
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     expires_at      TIMESTAMPTZ NOT NULL,
     verified_at     TIMESTAMPTZ
-);
-
--- Conversations: direct messages and groups
-CREATE TABLE IF NOT EXISTS conversations (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    type            TEXT NOT NULL DEFAULT 'direct', -- direct, group
-    name            TEXT,  -- for groups
-
-    -- Group encryption key (sealed per-member, not stored in plaintext)
-    -- Null for direct conversations (use pairwise DH)
-    group_key_version INTEGER DEFAULT 0,
-
-    created_at      TIMESTAMPTZ DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Conversation members
-CREATE TABLE IF NOT EXISTS conversation_members (
-    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-
-    -- Sealed group key for this member (hex, encrypted with member's X25519 pubkey)
-    encrypted_group_key TEXT,
-
-    role            TEXT NOT NULL DEFAULT 'member', -- admin, member
-    joined_at       TIMESTAMPTZ DEFAULT NOW(),
-
-    PRIMARY KEY (conversation_id, user_id)
 );
 
 -- Messages: server stores only encrypted blobs
