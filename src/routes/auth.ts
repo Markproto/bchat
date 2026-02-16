@@ -77,7 +77,7 @@ router.post('/telegram', async (req: Request, res: Response) => {
     }
 
     // Step 3: Match against bot join events
-    const joinEvent = getJoinEvent(telegramData.user.id);
+    const joinEvent = await getJoinEvent(telegramData.user.id);
     if (!joinEvent) {
       return res.status(403).json({
         error: 'No join record found. You must join via the official Telegram channel first.',

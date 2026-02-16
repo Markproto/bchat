@@ -250,6 +250,20 @@ async function getSenderBadge(userId: string): Promise<{
 }
 
 /**
+ * Broadcast a message to ALL connected clients (e.g., admin revocation alerts).
+ */
+export function broadcastToAll(message: object): void {
+  const payload = JSON.stringify(message);
+  for (const [, sockets] of clients) {
+    for (const socket of sockets) {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(payload);
+      }
+    }
+  }
+}
+
+/**
  * Check if a user is currently online.
  */
 export function isUserOnline(userId: string): boolean {

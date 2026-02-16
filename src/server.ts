@@ -64,26 +64,42 @@ async function main() {
   }));
   app.use(express.json({ limit: '1mb' }));
 
-  // Rate limiting
-  const rateLimiter = new RateLimiterMemory({
-    points: 60,      // requests
-    duration: 60,     // per minute
+  // Global rate limiting (60 req/min per IP)
+  const globalLimiter = new RateLimiterMemory({
+    points: 60,
+    duration: 60,
   });
 
   app.use(async (req, res, next) => {
     try {
-      await rateLimiter.consume(req.ip || 'unknown');
+      await globalLimiter.consume(req.ip || 'unknown');
       next();
     } catch {
       res.status(429).json({ error: 'Too many requests' });
     }
   });
 
-  // Routes
-  app.use('/api/auth', authRoutes);
+  // Stricter per-endpoint rate limiters for sensitive operations
+  const authLimiter = new RateLimiterMemory({ points: 10, duration: 900 }); // 10 per 15 min
+  const totpLimiter = new RateLimiterMemory({ points: 5, duration: 900 });  // 5 per 15 min
+  const adminLimiter = new RateLimiterMemory({ points: 20, duration: 60 }); // 20 per min
+
+  function endpointRateLimit(limiter: RateLimiterMemory) {
+    return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      try {
+        await limiter.consume(req.ip || 'unknown');
+        next();
+      } catch {
+        res.status(429).json({ error: 'Rate limit exceeded. Try again later.' });
+      }
+    };
+  }
+
+  // Routes with endpoint-specific rate limits
+  app.use('/api/auth', endpointRateLimit(authLimiter), authRoutes);
   app.use('/api/messages', messageRoutes);
   app.use('/api/wallet', walletRoutes);
-  app.use('/api/admin', adminRoutes);
+  app.use('/api/admin', endpointRateLimit(adminLimiter), adminRoutes);
   app.use('/api/support', supportRoutes);
   app.use('/api/identity', identityRoutes);
 

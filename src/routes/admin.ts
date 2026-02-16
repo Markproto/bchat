@@ -20,6 +20,7 @@ import {
 } from '../admin/verification';
 import { banDevice } from '../auth/device-ban';
 import { penalizeInviteChain, canUserInvite, getInviteTree } from '../admin/invite-accountability';
+import { broadcastToAll } from '../ws';
 import { query } from '../db';
 
 const router = Router();
@@ -150,6 +151,19 @@ router.post('/revoke', requireAuth, async (req: Request, res: Response) => {
     }
 
     await revokeAdmin(revokerId, targetAdminId);
+
+    // Broadcast revocation to all connected clients in real-time.
+    // Clients should immediately drop the admin badge for this user
+    // and any downstream admins who were cascade-revoked.
+    broadcastToAll({
+      type: 'admin_revoked',
+      payload: {
+        revokedAdminId: targetAdminId,
+        revokedBy: revokerId,
+        timestamp: Date.now(),
+        message: 'This admin has been revoked. Do not trust previous interactions.',
+      },
+    });
 
     res.json({
       success: true,

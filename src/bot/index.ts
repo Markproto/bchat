@@ -7,10 +7,13 @@
  *   3. When user joins via invite link, bot captures their Telegram user ID
  *   4. User opens bchat app → "Connect Telegram" → bot verifies identity
  *   5. Bot links Telegram ID to bchat user account
+ *
+ * All state is persisted to PostgreSQL — no data lost on restart.
  */
 
 import { Telegraf, Context } from 'telegraf';
 import { v4 as uuidv4 } from 'uuid';
+import { query } from '../db';
 
 export interface InviteRecord {
   code: string;
@@ -30,19 +33,13 @@ export interface TelegramJoinEvent {
 }
 
 /**
- * In-memory stores (replace with DB in production)
- */
-const pendingInvites = new Map<string, InviteRecord>();
-const joinEvents = new Map<number, TelegramJoinEvent>(); // telegramUserId -> join event
-
-/**
  * Create and configure the Telegram bot
  */
 export function createBot(token: string): Telegraf {
   const bot = new Telegraf(token);
 
-  // Track new members joining the channel/group
-  bot.on('chat_member', (ctx) => {
+  // Track new members joining the channel/group — persisted to DB
+  bot.on('chat_member', async (ctx) => {
     const update = ctx.chatMember;
     if (!update) return;
 
@@ -50,49 +47,73 @@ export function createBot(token: string): Telegraf {
     const user = update.new_chat_member.user;
 
     if (newStatus === 'member' || newStatus === 'administrator') {
-      const event: TelegramJoinEvent = {
-        userId: user.id,
-        username: user.username,
-        firstName: user.first_name,
-        joinedAt: new Date(),
-      };
-      joinEvents.set(user.id, event);
+      await query(
+        `INSERT INTO telegram_join_events (telegram_user_id, username, first_name)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (telegram_user_id) DO UPDATE SET username = $2, first_name = $3, joined_at = NOW()`,
+        [user.id, user.username || null, user.first_name]
+      );
       console.log(`[Bot] User joined: ${user.id} (@${user.username || 'no_username'})`);
     }
   });
 
   // /start command — entry point from invite links
-  bot.start((ctx) => {
+  bot.start(async (ctx) => {
     const payload = ctx.startPayload; // deep link payload
-    if (payload && pendingInvites.has(payload)) {
-      const invite = pendingInvites.get(payload)!;
-      invite.telegramUserId = ctx.from.id;
-      invite.telegramUsername = ctx.from.username;
-      invite.usedAt = new Date();
+    if (payload) {
+      // Check if invite exists and hasn't been used
+      const invite = await query(
+        'SELECT * FROM invites WHERE code = $1 AND used_by IS NULL AND expires_at > NOW()',
+        [payload]
+      );
 
-      ctx.reply(
-        `Welcome to bchat! Your invite has been verified.\n\n` +
-        `Open the bchat app and tap "Connect Telegram" to complete setup.\n\n` +
-        `Your verification code: ${payload}`
-      );
-    } else {
-      ctx.reply(
-        `Welcome to bchat!\n\n` +
-        `If you have an invite code, ask the person who invited you for their link.\n` +
-        `If you're already a member, open the bchat app to connect your account.`
-      );
+      if (invite.rows.length > 0) {
+        // Mark the Telegram user on this invite
+        await query(
+          'UPDATE invites SET telegram_user_id = $1, used_at = NOW() WHERE code = $2',
+          [ctx.from.id, payload]
+        );
+
+        // Also record the join event with the invite code
+        await query(
+          `INSERT INTO telegram_join_events (telegram_user_id, username, first_name, invite_code)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (telegram_user_id) DO UPDATE SET invite_code = $4, joined_at = NOW()`,
+          [ctx.from.id, ctx.from.username || null, ctx.from.first_name, payload]
+        );
+
+        ctx.reply(
+          `Welcome to bchat! Your invite has been verified.\n\n` +
+          `Open the bchat app and tap "Connect Telegram" to complete setup.\n\n` +
+          `Your verification code: ${payload}`
+        );
+        return;
+      }
     }
+
+    ctx.reply(
+      `Welcome to bchat!\n\n` +
+      `If you have an invite code, ask the person who invited you for their link.\n` +
+      `If you're already a member, open the bchat app to connect your account.`
+    );
   });
 
-  // /invite command — admins generate invite codes
+  // /invite command — admins generate invite codes (persisted to DB)
   bot.command('invite', async (ctx) => {
     const code = uuidv4().slice(0, 8);
-    const invite: InviteRecord = {
-      code,
-      createdAt: new Date(),
-      createdBy: String(ctx.from.id),
-    };
-    pendingInvites.set(code, invite);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Look up the bchat user by telegram ID for the created_by FK
+    const user = await query(
+      'SELECT id FROM users WHERE telegram_id = $1',
+      [ctx.from.id]
+    );
+
+    await query(
+      `INSERT INTO invites (code, created_by, expires_at)
+       VALUES ($1, $2, $3)`,
+      [code, user.rows[0]?.id || null, expiresAt]
+    );
 
     const botInfo = await ctx.telegram.getMe();
     const inviteLink = `https://t.me/${botInfo.username}?start=${code}`;
@@ -101,16 +122,17 @@ export function createBot(token: string): Telegraf {
       `Invite created!\n\nShare this link:\n${inviteLink}\n\n` +
       `Code: ${code}\nExpires in 24 hours.`
     );
-
-    // Auto-expire after 24h
-    setTimeout(() => pendingInvites.delete(code), 24 * 60 * 60 * 1000);
   });
 
   // /verify command — user requests verification status
-  bot.command('verify', (ctx) => {
+  bot.command('verify', async (ctx) => {
     const userId = ctx.from.id;
-    const joinEvent = joinEvents.get(userId);
-    if (joinEvent) {
+    const joinEvent = await query(
+      'SELECT * FROM telegram_join_events WHERE telegram_user_id = $1',
+      [userId]
+    );
+
+    if (joinEvent.rows.length > 0) {
       ctx.reply(
         `Your Telegram ID (${userId}) has been recorded.\n` +
         `Open the bchat app and connect your account to complete verification.`
@@ -129,20 +151,49 @@ export function createBot(token: string): Telegraf {
 /**
  * Look up a pending invite by code
  */
-export function getInvite(code: string): InviteRecord | undefined {
-  return pendingInvites.get(code);
+export async function getInvite(code: string): Promise<InviteRecord | undefined> {
+  const result = await query(
+    'SELECT * FROM invites WHERE code = $1 AND expires_at > NOW()',
+    [code]
+  );
+  if (result.rows.length === 0) return undefined;
+  const row = result.rows[0];
+  return {
+    code: row.code,
+    telegramUserId: row.telegram_user_id,
+    createdAt: row.created_at,
+    usedAt: row.used_at,
+    createdBy: row.created_by,
+  };
 }
 
 /**
  * Look up a join event by Telegram user ID
  */
-export function getJoinEvent(telegramUserId: number): TelegramJoinEvent | undefined {
-  return joinEvents.get(telegramUserId);
+export async function getJoinEvent(telegramUserId: number): Promise<TelegramJoinEvent | undefined> {
+  const result = await query(
+    'SELECT * FROM telegram_join_events WHERE telegram_user_id = $1',
+    [telegramUserId]
+  );
+  if (result.rows.length === 0) return undefined;
+  const row = result.rows[0];
+  return {
+    userId: row.telegram_user_id,
+    username: row.username,
+    firstName: row.first_name,
+    joinedAt: row.joined_at,
+    inviteCode: row.invite_code,
+  };
 }
 
 /**
  * Record a join event manually (e.g., from webhook data)
  */
-export function recordJoinEvent(event: TelegramJoinEvent): void {
-  joinEvents.set(event.userId, event);
+export async function recordJoinEvent(event: TelegramJoinEvent): Promise<void> {
+  await query(
+    `INSERT INTO telegram_join_events (telegram_user_id, username, first_name, invite_code)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (telegram_user_id) DO UPDATE SET username = $2, first_name = $3, joined_at = NOW()`,
+    [event.userId, event.username || null, event.firstName, event.inviteCode || null]
+  );
 }

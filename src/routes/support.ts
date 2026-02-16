@@ -23,7 +23,7 @@ import { query } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
-const challengeStore = new ChallengeStore();
+const challengeStore = new ChallengeStore(query);
 
 /**
  * Middleware: require authentication
@@ -219,7 +219,7 @@ router.post('/ticket/:id/verify', async (req: Request, res: Response) => {
 
     if (challengeId && signature) {
       // Admin has signed the challenge — verify it
-      const challenge = challengeStore.consume(challengeId);
+      const challenge = await challengeStore.consume(challengeId);
       if (!challenge) {
         return res.status(400).json({ error: 'Invalid or expired challenge' });
       }
@@ -266,7 +266,7 @@ router.post('/ticket/:id/verify', async (req: Request, res: Response) => {
     }
 
     // No signature yet — issue a challenge for the admin to sign
-    const challenge = challengeStore.issue('support_admin_verify');
+    const challenge = await challengeStore.issue('support_admin_verify', adminId);
 
     res.json({
       challengeId: challenge.id,

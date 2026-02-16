@@ -211,6 +211,15 @@ CREATE TABLE IF NOT EXISTS registration_signals (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Telegram join events: persisted so server restarts don't lose pending registrations
+CREATE TABLE IF NOT EXISTS telegram_join_events (
+    telegram_user_id BIGINT PRIMARY KEY,
+    username         TEXT,
+    first_name       TEXT NOT NULL,
+    invite_code      TEXT,
+    joined_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id);

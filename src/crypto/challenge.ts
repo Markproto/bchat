@@ -117,32 +117,43 @@ export async function verifySignedChallenge(
 }
 
 /**
- * In-memory challenge store (replace with Redis in production).
- * Tracks issued challenges to prevent replay attacks.
+ * Database-backed challenge store using the `challenges` table.
+ * Persists across restarts and works in multi-instance deployments.
  */
 export class ChallengeStore {
-  private challenges = new Map<string, Challenge>();
-  private usedChallenges = new Set<string>();
+  private queryFn: (text: string, params?: unknown[]) => Promise<any>;
 
-  issue(purpose: string): Challenge {
+  constructor(queryFn: (text: string, params?: unknown[]) => Promise<any>) {
+    this.queryFn = queryFn;
+  }
+
+  async issue(purpose: string, userId?: string): Promise<Challenge> {
     const challenge = createChallenge(purpose);
-    this.challenges.set(challenge.id, challenge);
-    // Auto-cleanup after expiry
-    setTimeout(() => {
-      this.challenges.delete(challenge.id);
-      this.usedChallenges.delete(challenge.id);
-    }, CHALLENGE_EXPIRY_MS + 1000);
+    await this.queryFn(
+      `INSERT INTO challenges (id, user_id, nonce, purpose, status, expires_at)
+       VALUES ($1, $2, $3, $4, 'pending', to_timestamp($5 / 1000.0))`,
+      [challenge.id, userId || '00000000-0000-0000-0000-000000000000', challenge.nonce, purpose, challenge.expiresAt]
+    );
     return challenge;
   }
 
-  consume(challengeId: string): Challenge | null {
-    if (this.usedChallenges.has(challengeId)) {
-      return null; // Replay attack prevention
-    }
-    const challenge = this.challenges.get(challengeId);
-    if (!challenge) return null;
-    this.usedChallenges.add(challengeId);
-    this.challenges.delete(challengeId);
-    return challenge;
+  async consume(challengeId: string): Promise<Challenge | null> {
+    // Atomically fetch and mark as verified to prevent replay attacks
+    const result = await this.queryFn(
+      `UPDATE challenges SET status = 'verified', verified_at = NOW()
+       WHERE id = $1 AND status = 'pending' AND expires_at > NOW()
+       RETURNING id, nonce, purpose, created_at, expires_at`,
+      [challengeId]
+    );
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      nonce: row.nonce,
+      purpose: row.purpose,
+      createdAt: new Date(row.created_at).getTime(),
+      expiresAt: new Date(row.expires_at).getTime(),
+    };
   }
 }
