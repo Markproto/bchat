@@ -31,7 +31,7 @@ import {
   getExtendedPublicKey,
 } from './crypto/hdwallet';
 
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = parseInt(process.env.PORT || '8080', 10);
 const WS_PORT = parseInt(process.env.WS_PORT || '3001', 10);
 
 async function main() {

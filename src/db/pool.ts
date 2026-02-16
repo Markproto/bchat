@@ -18,6 +18,10 @@ export const pool = new Pool(config);
 
 pool.on('error', (err) => {
   console.error('[DB] Unexpected pool error:', err.message);
+  if (err.message.includes('ENOTFOUND') || err.message.includes('getaddrinfo')) {
+    console.error('[DB] Hostname resolution failed. Check DATABASE_URL is set correctly.');
+    console.error('[DB] Current connectionString host may be unreachable.');
+  }
 });
 
 export async function query(text: string, params?: unknown[]) {
