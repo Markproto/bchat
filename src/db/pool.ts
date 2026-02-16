@@ -4,11 +4,14 @@
 
 import { Pool, PoolConfig } from 'pg';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const config: PoolConfig = {
   connectionString: process.env.DATABASE_URL || 'postgresql://bchat:bchat@localhost:5432/bchat',
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
 };
 
 export const pool = new Pool(config);

@@ -24,6 +24,7 @@ import supportRoutes from './routes/support';
 import identityRoutes from './routes/identity';
 import { createBot } from './bot';
 import { createWSServer } from './ws';
+import { runMigrations } from './db/migrate';
 import {
   generateMnemonic,
   masterNodeFromMnemonic,
@@ -34,6 +35,10 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const WS_PORT = parseInt(process.env.WS_PORT || '3001', 10);
 
 async function main() {
+  // ── 0. Auto-migrate database ──────────────────────────────────────
+  console.log('[Init] Running database migrations...');
+  await runMigrations();
+
   // ── 1. Initialize BIP39 Master Key ──────────────────────────────────
   let mnemonic = process.env.MASTER_MNEMONIC;
   if (!mnemonic) {

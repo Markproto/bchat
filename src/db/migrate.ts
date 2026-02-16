@@ -1,24 +1,28 @@
 /**
  * Simple migration runner — applies schema.sql to the database.
+ * Can be run standalone (npm run migrate) or called from server startup.
  */
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { pool } from './pool';
+import { pool, query } from './pool';
 
-async function migrate() {
+export async function runMigrations(): Promise<void> {
   const schemaPath = join(__dirname, 'schema.sql');
   const sql = readFileSync(schemaPath, 'utf-8');
 
   try {
-    await pool.query(sql);
+    await query(sql);
     console.log('[Migrate] Schema applied successfully');
   } catch (err) {
     console.error('[Migrate] Failed:', err);
-    process.exit(1);
-  } finally {
-    await pool.end();
+    throw err;
   }
 }
 
-migrate();
+// Run standalone if called directly (npm run migrate)
+if (require.main === module) {
+  runMigrations()
+    .then(() => pool.end())
+    .catch(() => process.exit(1));
+}
