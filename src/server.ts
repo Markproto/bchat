@@ -41,12 +41,17 @@ async function main() {
 
   // ── 1. Initialize BIP39 Master Key ──────────────────────────────────
   let mnemonic = process.env.MASTER_MNEMONIC;
+  if (mnemonic) {
+    // Strip accidental "KEY=value" prefix (common env var misconfiguration)
+    mnemonic = mnemonic.replace(/^MASTER_MNEMONIC=/, '').trim();
+  }
   if (!mnemonic) {
     mnemonic = generateMnemonic();
     console.log('[Init] Generated new master mnemonic (save this securely!):');
     console.log(`  ${mnemonic}`);
     console.log('[Init] Set MASTER_MNEMONIC in .env to persist across restarts');
   }
+  console.log(`[Init] Mnemonic word count: ${mnemonic.split(' ').length}`);
 
   const masterNode = await masterNodeFromMnemonic(mnemonic);
   const xpub = getExtendedPublicKey(masterNode);
