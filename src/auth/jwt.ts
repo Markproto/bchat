@@ -14,14 +14,13 @@ export interface TokenPayload {
 }
 
 const JWT_SECRET: Secret = process.env.JWT_SECRET || 'dev-secret-change-in-production';
-const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'];
 
 /**
  * Generate a JWT for an authenticated user.
  */
 export function generateToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): string {
-  const options: SignOptions = { expiresIn: JWT_EXPIRES_IN };
-  return jwt.sign(payload as object, JWT_SECRET, options);
+  return jwt.sign(payload as object, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
 
 /**
