@@ -4,14 +4,18 @@
 
 import { Pool, PoolConfig } from 'pg';
 
-const isProduction = process.env.NODE_ENV === 'production';
+const connectionString = process.env.DATABASE_URL || 'postgresql://bchat:bchat@localhost:5432/bchat';
+
+// Enable SSL for any non-localhost database (managed DBs like Digital Ocean
+// require SSL and use self-signed certs, so rejectUnauthorized must be false).
+const isRemoteDb = !connectionString.includes('localhost') && !connectionString.includes('127.0.0.1');
 
 const config: PoolConfig = {
-  connectionString: process.env.DATABASE_URL || 'postgresql://bchat:bchat@localhost:5432/bchat',
+  connectionString,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
-  ssl: isProduction ? { rejectUnauthorized: false } : false,
+  ssl: isRemoteDb ? { rejectUnauthorized: false } : false,
 };
 
 export const pool = new Pool(config);
