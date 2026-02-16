@@ -1,14 +1,21 @@
 /**
  * PostgreSQL connection pool.
+ *
+ * Digital Ocean managed databases require SSL with self-signed certs.
+ * Their DATABASE_URL includes ?sslmode=require, which can conflict with
+ * the `ssl` config option in node-postgres. We strip sslmode from the URL
+ * and set SSL explicitly to avoid the conflict.
  */
 
 import { Pool, PoolConfig } from 'pg';
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://bchat:bchat@localhost:5432/bchat';
+const rawUrl = process.env.DATABASE_URL || 'postgresql://bchat:bchat@localhost:5432/bchat';
+const isRemoteDb = !rawUrl.includes('localhost') && !rawUrl.includes('127.0.0.1');
 
-// Enable SSL for any non-localhost database (managed DBs like Digital Ocean
-// require SSL and use self-signed certs, so rejectUnauthorized must be false).
-const isRemoteDb = !connectionString.includes('localhost') && !connectionString.includes('127.0.0.1');
+// Strip sslmode from connection string — we manage SSL via the pool config.
+// Leaving sslmode in the URL causes node-postgres to create a TLS connection
+// with Node's default rejectUnauthorized=true, which rejects DO's self-signed cert.
+const connectionString = rawUrl.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
 
 const config: PoolConfig = {
   connectionString,
@@ -18,6 +25,11 @@ const config: PoolConfig = {
   ssl: isRemoteDb ? { rejectUnauthorized: false } : false,
 };
 
+// Log connection config at startup (mask credentials)
+const maskedUrl = connectionString.replace(/:([^@]+)@/, ':***@');
+console.log(`[DB] Connecting to: ${maskedUrl}`);
+console.log(`[DB] SSL: ${isRemoteDb ? 'enabled (rejectUnauthorized: false)' : 'disabled (localhost)'}`);
+
 export const pool = new Pool(config);
 
 pool.on('error', (err) => {
@@ -25,6 +37,9 @@ pool.on('error', (err) => {
   if (err.message.includes('ENOTFOUND') || err.message.includes('getaddrinfo')) {
     console.error('[DB] Hostname resolution failed. Check DATABASE_URL is set correctly.');
     console.error('[DB] Current connectionString host may be unreachable.');
+  }
+  if (err.message.includes('self-signed') || err.message.includes('SSL')) {
+    console.error('[DB] SSL certificate error. The sslmode may need adjustment.');
   }
 });
 
