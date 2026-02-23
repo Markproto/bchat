@@ -19,6 +19,7 @@ import adminRoutes from './routes/admin';
 import trustRoutes from './routes/trust';
 import scamRoutes from './routes/scam';
 import messageRoutes from './routes/messages';
+import supportRoutes from './routes/support';
 import { createBot } from './bot';
 import { rateLimit } from './middleware/rateLimit';
 
@@ -45,6 +46,7 @@ async function main() {
   app.use('/api/trust', rateLimit({ points: 30, duration: 60 }), trustRoutes);
   app.use('/api/scam', rateLimit({ points: 30, duration: 60 }), scamRoutes);
   app.use('/api/messages', rateLimit({ points: 60, duration: 60 }), messageRoutes);
+  app.use('/api/support', rateLimit({ points: 20, duration: 60 }), supportRoutes);
 
   // Health check
   app.get('/', (_req, res) => {
