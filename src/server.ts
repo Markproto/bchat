@@ -32,7 +32,6 @@ import {
 } from './crypto/hdwallet';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
-const WS_PORT = parseInt(process.env.WS_PORT || '3001', 10);
 
 async function main() {
   // ── 0. Auto-migrate database ──────────────────────────────────────
@@ -108,12 +107,15 @@ async function main() {
   app.use('/api/support', supportRoutes);
   app.use('/api/identity', identityRoutes);
 
-  // Health check
+  // Health check — root path required for DigitalOcean readiness probe
+  app.get('/', (_req, res) => {
+    res.json({ status: 'ok', version: '0.1.0' });
+  });
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', version: '0.1.0' });
   });
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`[Server] API running on http://localhost:${PORT}`);
   });
 
@@ -121,8 +123,12 @@ async function main() {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (botToken) {
     const bot = createBot(botToken);
-    bot.launch();
-    console.log('[Bot] Telegram bot started');
+    // Wrap launch in try-catch: with instance_count > 1, multiple instances
+    // compete for Telegram long-polling and one will get conflicts.
+    bot.launch({ dropPendingUpdates: true }).catch((err: Error) => {
+      console.error('[Bot] Failed to start (may be running on another instance):', err.message);
+    });
+    console.log('[Bot] Telegram bot starting...');
 
     // Graceful shutdown
     process.once('SIGINT', () => bot.stop('SIGINT'));
@@ -131,8 +137,10 @@ async function main() {
     console.log('[Bot] TELEGRAM_BOT_TOKEN not set — bot disabled');
   }
 
-  // ── 4. WebSocket Server ─────────────────────────────────────────────
-  createWSServer(WS_PORT);
+  // ── 4. WebSocket Server (attached to HTTP server — same port) ──────
+  // DigitalOcean App Platform only exposes one port (8080).
+  // Attaching WS to the Express server lets both share that port.
+  createWSServer(server);
 
   console.log('[Init] bchat server fully initialized');
 }

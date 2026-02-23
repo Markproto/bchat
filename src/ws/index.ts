@@ -12,7 +12,7 @@
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
-import { IncomingMessage } from 'http';
+import { IncomingMessage, Server as HttpServer } from 'http';
 import { verifyToken, TokenPayload } from '../auth/jwt';
 import { verifyAdmin } from '../admin/verification';
 import { generatePubkeyFingerprint } from '../admin/identity-guard';
@@ -36,15 +36,17 @@ const clients = new Map<string, Set<AuthenticatedSocket>>();
 
 /**
  * Create and configure the WebSocket server.
+ * Accepts an HTTP server to share the same port (required for DO App Platform
+ * which only exposes a single port).
  */
-export function createWSServer(port: number): WebSocketServer {
-  const wss = new WebSocketServer({ port });
+export function createWSServer(server: HttpServer): WebSocketServer {
+  const wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const socket = ws as AuthenticatedSocket;
 
     // Authenticate via query param token
-    const url = new URL(req.url || '', `http://localhost:${port}`);
+    const url = new URL(req.url || '', `http://localhost`);
     const token = url.searchParams.get('token');
 
     if (!token) {
@@ -122,7 +124,7 @@ export function createWSServer(port: number): WebSocketServer {
 
   wss.on('close', () => clearInterval(heartbeat));
 
-  console.log(`[WS] WebSocket server running on port ${port}`);
+  console.log(`[WS] WebSocket server attached to HTTP server at /ws`);
   return wss;
 }
 
