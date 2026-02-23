@@ -2,6 +2,10 @@
  * JWT authentication middleware.
  * Extracts and verifies the Bearer token, attaching the decoded
  * payload to `req.user` for downstream route handlers.
+ *
+ * Also populates isAdmin / isVerifiedAdmin from the DB so downstream
+ * middleware (e.g. cooling period) can check admin status without
+ * an extra query.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -10,6 +14,8 @@ import { query } from '../db/pool';
 
 export interface AuthenticatedUser extends TokenPayload {
   id: string;
+  isAdmin: boolean;
+  isVerifiedAdmin: boolean;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -24,7 +30,7 @@ declare global {
   }
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
+export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token = extractBearerToken(req.headers.authorization);
   if (!token) {
     res.status(401).json({ error: 'Missing or invalid Authorization header' });
@@ -33,7 +39,31 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
   try {
     const payload = verifyToken(token);
-    (req as AuthenticatedRequest).user = { ...payload, id: payload.userId };
+
+    // Fetch admin flags so downstream middleware can check without extra queries
+    let isAdmin = false;
+    let isVerifiedAdmin = false;
+    try {
+      const result = await query(
+        'SELECT is_admin, is_verified_admin, role, is_verified FROM users WHERE id = $1',
+        [payload.userId]
+      );
+      const row = result.rows[0];
+      if (row) {
+        isAdmin = row.is_admin || row.role === 'admin' || row.role === 'creator';
+        isVerifiedAdmin = row.is_verified_admin || (row.is_verified && (row.role === 'admin' || row.role === 'creator'));
+      }
+    } catch {
+      // If DB query fails, proceed without admin flags — fail open for auth,
+      // individual admin-gated routes will re-check via requireAdmin/requireVerifiedAdmin
+    }
+
+    (req as AuthenticatedRequest).user = {
+      ...payload,
+      id: payload.userId,
+      isAdmin,
+      isVerifiedAdmin,
+    };
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
@@ -47,6 +77,13 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     return;
   }
 
+  // Fast path: already populated by authenticate
+  if (user.isAdmin) {
+    next();
+    return;
+  }
+
+  // Fallback: re-check DB in case token was issued before admin promotion
   query('SELECT is_admin, role FROM users WHERE id = $1', [user.id])
     .then((result) => {
       const row = result.rows[0];
@@ -54,6 +91,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
         res.status(403).json({ error: 'Admin access required' });
         return;
       }
+      user.isAdmin = true;
       next();
     })
     .catch(() => {
@@ -65,6 +103,12 @@ export function requireVerifiedAdmin(req: Request, res: Response, next: NextFunc
   const user = (req as AuthenticatedRequest).user;
   if (!user) {
     res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  // Fast path
+  if (user.isVerifiedAdmin) {
+    next();
     return;
   }
 
@@ -80,6 +124,7 @@ export function requireVerifiedAdmin(req: Request, res: Response, next: NextFunc
         res.status(403).json({ error: 'Verified admin access required' });
         return;
       }
+      user.isVerifiedAdmin = true;
       next();
     })
     .catch(() => {
