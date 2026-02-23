@@ -16,6 +16,7 @@ import helmet from 'helmet';
 import authRoutes from './routes/auth';
 import inviteRoutes from './routes/invites';
 import adminRoutes from './routes/admin';
+import trustRoutes from './routes/trust';
 import { createBot } from './bot';
 import { rateLimit } from './middleware/rateLimit';
 
@@ -39,6 +40,7 @@ async function main() {
   app.use('/api/auth', rateLimit({ points: 10, duration: 900 }), authRoutes);
   app.use('/api/invites', inviteRoutes);
   app.use('/api/admin', rateLimit({ points: 20, duration: 60 }), adminRoutes);
+  app.use('/api/trust', rateLimit({ points: 30, duration: 60 }), trustRoutes);
 
   // Health check
   app.get('/', (_req, res) => {
