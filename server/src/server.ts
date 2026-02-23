@@ -17,6 +17,7 @@ import authRoutes from './routes/auth';
 import inviteRoutes from './routes/invites';
 import adminRoutes from './routes/admin';
 import trustRoutes from './routes/trust';
+import scamRoutes from './routes/scam';
 import { createBot } from './bot';
 import { rateLimit } from './middleware/rateLimit';
 
@@ -29,7 +30,7 @@ async function main() {
   app.use(helmet());
   app.use(cors({
     origin: process.env.CORS_ORIGIN || '*',
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
   }));
   app.use(express.json({ limit: '1mb' }));
 
@@ -41,6 +42,7 @@ async function main() {
   app.use('/api/invites', inviteRoutes);
   app.use('/api/admin', rateLimit({ points: 20, duration: 60 }), adminRoutes);
   app.use('/api/trust', rateLimit({ points: 30, duration: 60 }), trustRoutes);
+  app.use('/api/scam', rateLimit({ points: 30, duration: 60 }), scamRoutes);
 
   // Health check
   app.get('/', (_req, res) => {
