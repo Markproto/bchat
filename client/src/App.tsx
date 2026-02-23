@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import AdminGuide from "./AdminGuide.tsx";
 import TeamSpec from "./TeamSpec.tsx";
+import LandingPage from "./LandingPage.tsx";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -582,7 +583,7 @@ export default function BchatApp() {
   const [tab, setTab] = useState("chats");
   const [selChat, setSelChat] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Record<string, Message[]>>(MOCK_MSGS);
-  const [overlay, setOverlay] = useState<"guide" | "spec" | null>(null);
+  const [overlay, setOverlay] = useState<"landing" | "guide" | "spec" | null>("landing");
 
   const unreadTotal = CONTACTS.reduce((a, c) => a + c.unread, 0);
 
@@ -596,18 +597,27 @@ export default function BchatApp() {
 
   const contact = CONTACTS.find(c => c.id === selChat);
 
-  // Full-screen overlays for guide and spec
+  // Full-screen overlays
+  if (overlay === "landing") {
+    return (
+      <LandingPage
+        onOpenGuide={() => setOverlay("guide")}
+        onOpenSpec={() => setOverlay("spec")}
+        onOpenApp={() => setOverlay(null)}
+      />
+    );
+  }
   if (overlay === "guide") {
     return (
       <div style={{ height: "100vh", display: "flex", background: T.bg, color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
-        <AdminGuide onBack={() => setOverlay(null)} />
+        <AdminGuide onBack={() => setOverlay("landing")} />
       </div>
     );
   }
   if (overlay === "spec") {
     return (
       <div style={{ height: "100vh", display: "flex", background: T.bg, color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
-        <TeamSpec onBack={() => setOverlay(null)} />
+        <TeamSpec onBack={() => setOverlay("landing")} />
       </div>
     );
   }
