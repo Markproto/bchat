@@ -13,7 +13,7 @@
 
 import { Telegraf, Context } from 'telegraf';
 import { v4 as uuidv4 } from 'uuid';
-import { query } from '../db';
+import { query } from '../db/pool';
 
 export interface InviteRecord {
   code: string;

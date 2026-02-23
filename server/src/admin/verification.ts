@@ -23,8 +23,8 @@
  *   - Be directly verified by the creator
  */
 
-import { signChallenge, verifySignedChallenge, createChallenge } from '../crypto/challenge';
-import { query } from '../db';
+import { signChallenge, verifySignedChallenge, createChallenge } from '../crypto/identity';
+import { query } from '../db/pool';
 
 export type UserRole = 'creator' | 'admin' | 'user';
 

@@ -1,22 +1,16 @@
 /**
- * Challenge-Response Signing (ed25519)
+ * Identity & Authentication Cryptography
  *
- * Anti-impersonation layer: when a user needs to prove identity
- * (e.g., support chat, sensitive actions), the server issues a
- * cryptographic challenge (nonce). The user signs it with their
- * on-device ed25519 private key, and the server verifies against
- * the stored public key.
- *
- * Flow:
- *   1. Server generates nonce (UUID + timestamp + purpose)
- *   2. Client signs nonce with ed25519 private key
- *   3. Server verifies signature against user's registered public key
+ * Combines:
+ *   - ed25519 keypair generation (on-device identity)
+ *   - Challenge-response signing (anti-impersonation)
+ *   - JWT token management (session auth)
  */
 
 import * as ed from '@noble/ed25519';
-import { sha512 } from '@noble/hashes/sha512';
-import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
+import jwt, { Secret } from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 
 // noble-ed25519 v2 requires setting sha512
 ed.etc.sha512Sync = (...m) => {
@@ -24,6 +18,50 @@ ed.etc.sha512Sync = (...m) => {
   m.forEach(msg => h.update(msg));
   return new Uint8Array(h.digest());
 };
+
+// ── JWT ────────────────────────────────────────────────────────────────
+
+export interface TokenPayload {
+  userId: string;
+  telegramId: number;
+  deviceId: string;
+  iat?: number;
+  exp?: number;
+}
+
+const JWT_SECRET: Secret = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'];
+
+export function generateToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): string {
+  return jwt.sign(payload as object, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+}
+
+export function verifyToken(token: string): TokenPayload {
+  return jwt.verify(token, JWT_SECRET) as TokenPayload;
+}
+
+export function extractBearerToken(authHeader: string | undefined): string | null {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  return authHeader.slice(7);
+}
+
+// ── ed25519 Identity Keys ──────────────────────────────────────────────
+
+export interface Ed25519KeyPair {
+  publicKey: string;  // hex
+  privateKey: string; // hex
+}
+
+export async function generateIdentityKeyPair(): Promise<Ed25519KeyPair> {
+  const privateKey = ed.utils.randomPrivateKey();
+  const publicKey = await ed.getPublicKeyAsync(privateKey);
+  return {
+    publicKey: Buffer.from(publicKey).toString('hex'),
+    privateKey: Buffer.from(privateKey).toString('hex'),
+  };
+}
+
+// ── Challenge-Response ─────────────────────────────────────────────────
 
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -35,68 +73,30 @@ export interface Challenge {
   expiresAt: number;
 }
 
-export interface SignedChallenge {
-  challengeId: string;
-  signature: string; // hex-encoded ed25519 signature
-  publicKey: string; // hex-encoded ed25519 public key
-}
-
-export interface Ed25519KeyPair {
-  publicKey: string;  // hex
-  privateKey: string; // hex
-}
-
-/**
- * Generate a new ed25519 keypair for on-device identity.
- */
-export async function generateIdentityKeyPair(): Promise<Ed25519KeyPair> {
-  const privateKey = ed.utils.randomPrivateKey();
-  const publicKey = await ed.getPublicKeyAsync(privateKey);
-  return {
-    publicKey: Buffer.from(publicKey).toString('hex'),
-    privateKey: Buffer.from(privateKey).toString('hex'),
-  };
-}
-
-/**
- * Create a challenge for a user to sign.
- */
 export function createChallenge(purpose: string = 'identity_verify'): Challenge {
   const id = uuidv4();
   const now = Date.now();
-  const nonce = `${id}:${now}:${purpose}`;
   return {
     id,
-    nonce,
+    nonce: `${id}:${now}:${purpose}`,
     purpose,
     createdAt: now,
     expiresAt: now + CHALLENGE_EXPIRY_MS,
   };
 }
 
-/**
- * Sign a challenge nonce with an ed25519 private key (client-side).
- */
-export async function signChallenge(
-  nonce: string,
-  privateKeyHex: string
-): Promise<string> {
+export async function signChallenge(nonce: string, privateKeyHex: string): Promise<string> {
   const message = new TextEncoder().encode(nonce);
   const privateKey = Buffer.from(privateKeyHex, 'hex');
   const signature = await ed.signAsync(message, privateKey);
   return Buffer.from(signature).toString('hex');
 }
 
-/**
- * Verify a signed challenge against a public key (server-side).
- * Returns true if the signature is valid and the challenge hasn't expired.
- */
 export async function verifySignedChallenge(
   challenge: Challenge,
   signatureHex: string,
   publicKeyHex: string
 ): Promise<{ valid: boolean; reason?: string }> {
-  // Check expiry
   if (Date.now() > challenge.expiresAt) {
     return { valid: false, reason: 'Challenge expired' };
   }
@@ -107,18 +107,15 @@ export async function verifySignedChallenge(
 
   try {
     const valid = await ed.verifyAsync(signature, message, publicKey);
-    if (!valid) {
-      return { valid: false, reason: 'Invalid signature' };
-    }
+    if (!valid) return { valid: false, reason: 'Invalid signature' };
     return { valid: true };
-  } catch (err) {
+  } catch {
     return { valid: false, reason: 'Verification error' };
   }
 }
 
 /**
- * Database-backed challenge store using the `challenges` table.
- * Persists across restarts and works in multi-instance deployments.
+ * Database-backed challenge store.
  */
 export class ChallengeStore {
   private queryFn: (text: string, params?: unknown[]) => Promise<any>;
@@ -138,7 +135,6 @@ export class ChallengeStore {
   }
 
   async consume(challengeId: string): Promise<Challenge | null> {
-    // Atomically fetch and mark as verified to prevent replay attacks
     const result = await this.queryFn(
       `UPDATE challenges SET status = 'verified', verified_at = NOW()
        WHERE id = $1 AND status = 'pending' AND expires_at > NOW()

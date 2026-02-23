@@ -3,25 +3,20 @@
  *
  * POST /api/admin/promote          — Promote a user to admin (creator/admin only)
  * POST /api/admin/revoke           — Revoke admin status
- * GET  /api/admin/verify/:userId   — Verify if a user is a legit admin (any user can call)
- * GET  /api/admin/chain/:userId    — Get full signature chain for an admin
+ * GET  /api/admin/verify/:userId   — Verify if a user is a legit admin
  * GET  /api/admin/list             — List all active admins
  * POST /api/admin/initialize       — One-time creator setup
  */
 
 import { Router, Request, Response } from 'express';
-import { verifyToken, extractBearerToken } from '../auth/jwt';
+import { verifyToken, extractBearerToken } from '../crypto/identity';
 import {
-  promoteToAdmin,
   verifyAdmin,
   revokeAdmin,
   getCreatorPubkey,
   initializeCreator,
 } from '../admin/verification';
-import { banDevice } from '../auth/device-ban';
-import { penalizeInviteChain, canUserInvite, getInviteTree } from '../admin/invite-accountability';
-import { broadcastToAll } from '../ws';
-import { query } from '../db';
+import { query } from '../db/pool';
 
 const router = Router();
 
@@ -45,7 +40,6 @@ function requireAuth(req: Request, res: Response, next: Function) {
 /**
  * POST /api/admin/initialize
  * One-time setup: make the first user the creator (root of trust).
- * Can only be called once, ever.
  */
 router.post('/initialize', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -63,12 +57,7 @@ router.post('/initialize', requireAuth, async (req: Request, res: Response) => {
 
 /**
  * POST /api/admin/promote
- * Promote a user to admin. Requires the promoter's private key to sign.
- * Body: { targetUserId, promoterPrivateKey, role? }
- *
- * The private key is used client-side in production (never sent to server).
- * This endpoint exists for the initial implementation; in production,
- * signing happens on-device and only the signature is sent.
+ * Promote a user to admin. Client signs on-device, sends signature + payload.
  */
 router.post('/promote', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -79,58 +68,54 @@ router.post('/promote', requireAuth, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'targetUserId required' });
     }
 
-    // In production: client signs the payload on-device, sends signature + payload
-    // For now, accept pre-signed data
-    if (signature && signedPayload) {
-      // Verify the signature matches the promoter's pubkey
-      const promoter = await query(
-        'SELECT identity_pubkey, role FROM users WHERE id = $1',
-        [promoterId]
-      );
-      if (!promoter.rows[0] || (promoter.rows[0].role !== 'creator' && promoter.rows[0].role !== 'admin')) {
-        return res.status(403).json({ error: 'Only creators and admins can promote users' });
-      }
-
-      const target = await query(
-        'SELECT identity_pubkey, telegram_id FROM users WHERE id = $1',
-        [targetUserId]
-      );
-      if (!target.rows[0]) {
-        return res.status(404).json({ error: 'Target user not found' });
-      }
-      if (!target.rows[0].telegram_id) {
-        return res.status(400).json({ error: 'Target must verify via Telegram first' });
-      }
-
-      // Store the promotion with the pre-signed data
-      await query(
-        `INSERT INTO admin_chain (admin_id, promoted_by, signature, signed_payload, role_granted)
-         VALUES ($1, $2, $3, $4, 'admin')`,
-        [targetUserId, promoterId, signature, signedPayload]
-      );
-      await query(
-        `UPDATE users SET role = 'admin', verified_by = $1, admin_signature = $2, is_verified = TRUE
-         WHERE id = $3`,
-        [promoterId, signature, targetUserId]
-      );
-      await query(
-        `INSERT INTO audit_log (user_id, event_type, details, ip_address)
-         VALUES ($1, $2, $3, $4)`,
-        [promoterId, 'admin_promoted', JSON.stringify({ targetUserId }), req.ip]
-      );
-
-      return res.json({
-        success: true,
-        admin: {
-          userId: targetUserId,
-          pubkey: target.rows[0].identity_pubkey,
-          promotedBy: promoterId,
-        },
+    if (!signature || !signedPayload) {
+      return res.status(400).json({
+        error: 'Provide signature and signedPayload (sign on-device)',
       });
     }
 
-    return res.status(400).json({
-      error: 'Provide signature and signedPayload (sign on-device)',
+    const promoter = await query(
+      'SELECT identity_pubkey, role FROM users WHERE id = $1',
+      [promoterId]
+    );
+    if (!promoter.rows[0] || (promoter.rows[0].role !== 'creator' && promoter.rows[0].role !== 'admin')) {
+      return res.status(403).json({ error: 'Only creators and admins can promote users' });
+    }
+
+    const target = await query(
+      'SELECT identity_pubkey, telegram_id FROM users WHERE id = $1',
+      [targetUserId]
+    );
+    if (!target.rows[0]) {
+      return res.status(404).json({ error: 'Target user not found' });
+    }
+    if (!target.rows[0].telegram_id) {
+      return res.status(400).json({ error: 'Target must verify via Telegram first' });
+    }
+
+    await query(
+      `INSERT INTO admin_chain (admin_id, promoted_by, signature, signed_payload, role_granted)
+       VALUES ($1, $2, $3, $4, 'admin')`,
+      [targetUserId, promoterId, signature, signedPayload]
+    );
+    await query(
+      `UPDATE users SET role = 'admin', verified_by = $1, admin_signature = $2, is_verified = TRUE
+       WHERE id = $3`,
+      [promoterId, signature, targetUserId]
+    );
+    await query(
+      `INSERT INTO audit_log (user_id, event_type, details, ip_address)
+       VALUES ($1, $2, $3, $4)`,
+      [promoterId, 'admin_promoted', JSON.stringify({ targetUserId }), req.ip]
+    );
+
+    res.json({
+      success: true,
+      admin: {
+        userId: targetUserId,
+        pubkey: target.rows[0].identity_pubkey,
+        promotedBy: promoterId,
+      },
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -152,19 +137,6 @@ router.post('/revoke', requireAuth, async (req: Request, res: Response) => {
 
     await revokeAdmin(revokerId, targetAdminId);
 
-    // Broadcast revocation to all connected clients in real-time.
-    // Clients should immediately drop the admin badge for this user
-    // and any downstream admins who were cascade-revoked.
-    broadcastToAll({
-      type: 'admin_revoked',
-      payload: {
-        revokedAdminId: targetAdminId,
-        revokedBy: revokerId,
-        timestamp: Date.now(),
-        message: 'This admin has been revoked. Do not trust previous interactions.',
-      },
-    });
-
     res.json({
       success: true,
       message: `Admin ${targetAdminId} revoked. Any admins they promoted have also been revoked.`,
@@ -176,11 +148,7 @@ router.post('/revoke', requireAuth, async (req: Request, res: Response) => {
 
 /**
  * GET /api/admin/verify/:userId
- * ANY user can call this to verify if someone is a real admin.
- * Returns the full cryptographic proof chain.
- *
- * This is the anti-scam endpoint — the app calls this automatically
- * whenever a user interacts with someone claiming to be admin/support.
+ * Verify if someone is a real admin. Returns cryptographic proof chain.
  */
 router.get('/verify/:userId', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -197,7 +165,6 @@ router.get('/verify/:userId', requireAuth, async (req: Request, res: Response) =
         promotedBy: link.promotedBy,
         role: link.roleGranted,
         grantedAt: link.grantedAt,
-        // Include pubkeys so clients can independently verify signatures
         adminPubkey: link.adminPubkey,
         promoterPubkey: link.promoterPubkey,
         signature: link.signature,
@@ -238,25 +205,22 @@ router.get('/list', requireAuth, async (req: Request, res: Response) => {
 
 /**
  * POST /api/admin/ban
- * Ban a user AND their device. Even if they get a new Telegram account
- * on the same phone, the hardware fingerprint blocks re-registration.
+ * Ban a user. Deactivates their account.
  */
 router.post('/ban', requireAuth, async (req: Request, res: Response) => {
   try {
     const adminId = (req as any).userId;
 
-    // Verify caller is admin
     const admin = await query('SELECT role FROM users WHERE id = $1', [adminId]);
     if (admin.rows[0]?.role !== 'creator' && admin.rows[0]?.role !== 'admin') {
       return res.status(403).json({ error: 'Only admins can ban users' });
     }
 
-    const { targetUserId, reason, durationDays } = req.body;
+    const { targetUserId, reason } = req.body;
     if (!targetUserId || !reason) {
       return res.status(400).json({ error: 'targetUserId and reason required' });
     }
 
-    // Can't ban other admins (only creator can)
     const target = await query('SELECT role FROM users WHERE id = $1', [targetUserId]);
     if (target.rows[0]?.role === 'admin' && admin.rows[0]?.role !== 'creator') {
       return res.status(403).json({ error: 'Only the creator can ban admins' });
@@ -265,37 +229,20 @@ router.post('/ban', requireAuth, async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Cannot ban the creator' });
     }
 
-    // Ban the device (not just the account)
-    await banDevice(targetUserId, adminId, reason, durationDays);
+    await query(
+      'UPDATE users SET is_active = FALSE WHERE id = $1',
+      [targetUserId]
+    );
 
-    // Penalize whoever invited this bad actor
-    const penalties = await penalizeInviteChain(targetUserId);
+    await query(
+      `INSERT INTO audit_log (user_id, event_type, details, ip_address)
+       VALUES ($1, $2, $3, $4)`,
+      [adminId, 'user_banned', JSON.stringify({ targetUserId, reason }), req.ip]
+    );
 
     res.json({
       success: true,
-      message: `User ${targetUserId} banned. Device hardware fingerprint blocked.`,
-      duration: durationDays ? `${durationDays} days` : 'permanent',
-      inviteChainPenalties: penalties.penalized,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * GET /api/admin/invite-status/:userId
- * Check a user's invite privileges and reputation.
- */
-router.get('/invite-status/:userId', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const status = await canUserInvite(req.params.userId);
-    const tree = await getInviteTree(req.params.userId);
-
-    res.json({
-      ...status,
-      invitedBy: tree.invitedBy,
-      inviteeCount: tree.invitees.length,
-      inviteesBanned: tree.invitees.filter(i => i.bannedStatus).length,
+      message: `User ${targetUserId} banned.`,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

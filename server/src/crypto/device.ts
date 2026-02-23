@@ -1,12 +1,8 @@
 /**
- * Device Binding
+ * Device Binding & Fingerprinting
  *
  * Each user's account is bound to specific devices. New device logins
- * require re-verification (TOTP + Telegram confirm). Prevents session
- * hijacking and account takeover.
- *
- * In production, use Secure Enclave (iOS) or StrongBox (Android) for
- * hardware-bound keys. This module handles the server-side binding logic.
+ * require re-verification. Prevents session hijacking and account takeover.
  */
 
 import { createHash, randomBytes } from 'crypto';
@@ -18,7 +14,7 @@ export interface DeviceBinding {
   boundAt: Date;
   lastSeen: Date;
   trusted: boolean;
-  name?: string; // e.g., "iPhone 15 Pro", "Pixel 8"
+  name?: string;
 }
 
 /**
@@ -30,14 +26,13 @@ export function generateDeviceId(): string {
 
 /**
  * Create a device fingerprint from client-provided device info.
- * This is a hash of hardware/software identifiers.
  */
 export function createDeviceFingerprint(info: {
-  platform: string;    // ios, android, web
-  model?: string;      // device model
-  osVersion?: string;  // OS version
-  appVersion: string;  // bchat app version
-  hardwareId?: string; // Secure Enclave / StrongBox derived key
+  platform: string;
+  model?: string;
+  osVersion?: string;
+  appVersion: string;
+  hardwareId?: string;
 }): string {
   const data = [
     info.platform,
@@ -52,7 +47,6 @@ export function createDeviceFingerprint(info: {
 
 /**
  * Validate that a device fingerprint matches a stored binding.
- * Returns false if the device appears to have changed.
  */
 export function validateDeviceBinding(
   binding: DeviceBinding,

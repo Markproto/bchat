@@ -5,7 +5,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { extractBearerToken, verifyToken, TokenPayload } from '../auth/jwt';
+import { extractBearerToken, verifyToken, TokenPayload } from '../crypto/identity';
 
 declare global {
   namespace Express {
