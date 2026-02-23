@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import AdminGuide from "./AdminGuide.tsx";
+import TeamSpec from "./TeamSpec.tsx";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -518,7 +520,7 @@ function ContactsTab({ contacts }: { contacts: Contact[] }) {
 }
 
 // ===================== SETTINGS TAB =====================
-function SettingsTab() {
+function SettingsTab({ onOpenGuide, onOpenSpec }: { onOpenGuide: () => void; onOpenSpec: () => void }) {
   return (
     <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}><SettingsIcon size={22} color={T.accent} /><span style={{ fontWeight: 700, fontSize: 18, color: T.text }}>Settings</span></div>
@@ -541,6 +543,31 @@ function SettingsTab() {
           </div>
         ))}
       </Card>
+      <Card style={{ marginBottom: 10 }}>
+        <p style={{ fontWeight: 600, fontSize: 13, color: T.text, marginBottom: 8 }}>Resources</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <button onClick={onOpenGuide} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: T.input, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>📖</span>
+              <div style={{ textAlign: "left" }}>
+                <p style={{ fontWeight: 600, fontSize: 13, color: T.text, margin: 0 }}>Admin User Guide</p>
+                <p style={{ fontSize: 10, color: T.muted, margin: "2px 0 0" }}>Step-by-step walkthrough of every feature</p>
+              </div>
+            </div>
+            <span style={{ color: T.muted, fontSize: 14 }}>&rarr;</span>
+          </button>
+          <button onClick={onOpenSpec} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: T.input, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>📋</span>
+              <div style={{ textAlign: "left" }}>
+                <p style={{ fontWeight: 600, fontSize: 13, color: T.text, margin: 0 }}>Team Capability Sheet</p>
+                <p style={{ fontSize: 10, color: T.muted, margin: "2px 0 0" }}>How your team can use bchat — share with stakeholders</p>
+              </div>
+            </div>
+            <span style={{ color: T.muted, fontSize: 14 }}>&rarr;</span>
+          </button>
+        </div>
+      </Card>
       <Card>
         <p style={{ fontWeight: 600, fontSize: 13, color: T.text, marginBottom: 8 }}>About bchat</p>
         <p style={{ fontSize: 11, color: T.muted }}>Version 1.0.0 — Fraud-Elimination Messaging Platform</p>
@@ -555,6 +582,7 @@ export default function BchatApp() {
   const [tab, setTab] = useState("chats");
   const [selChat, setSelChat] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Record<string, Message[]>>(MOCK_MSGS);
+  const [overlay, setOverlay] = useState<"guide" | "spec" | null>(null);
 
   const unreadTotal = CONTACTS.reduce((a, c) => a + c.unread, 0);
 
@@ -568,6 +596,22 @@ export default function BchatApp() {
 
   const contact = CONTACTS.find(c => c.id === selChat);
 
+  // Full-screen overlays for guide and spec
+  if (overlay === "guide") {
+    return (
+      <div style={{ height: "100vh", display: "flex", background: T.bg, color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
+        <AdminGuide onBack={() => setOverlay(null)} />
+      </div>
+    );
+  }
+  if (overlay === "spec") {
+    return (
+      <div style={{ height: "100vh", display: "flex", background: T.bg, color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
+        <TeamSpec onBack={() => setOverlay(null)} />
+      </div>
+    );
+  }
+
   return (
     <div style={{ height: "100vh", display: "flex", background: T.bg, color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
       <Sidebar activeTab={tab} setTab={setTab} unreadTotal={unreadTotal} alertCount={MOCK_ALERTS.length} />
@@ -579,7 +623,7 @@ export default function BchatApp() {
       {tab === "alerts" && <AlertsTab />}
       {tab === "support" && <SupportTab />}
       {tab === "trust" && <TrustTab />}
-      {tab === "settings" && <SettingsTab />}
+      {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} />}
     </div>
   );
 }
