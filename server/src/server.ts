@@ -3,6 +3,7 @@
  *
  * Entry point that wires together:
  *   - Express API (auth, invites, admin)
+ *   - WebSocket relay (real-time message delivery)
  *   - Telegram Bot (invites, identity linking)
  */
 
@@ -22,6 +23,7 @@ import messageRoutes from './routes/messages';
 import supportRoutes from './routes/support';
 import { createBot } from './bot';
 import { rateLimit } from './middleware/rateLimit';
+import { createWebSocketServer, getConnectionCount } from './ws';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
@@ -50,15 +52,18 @@ async function main() {
 
   // Health check
   app.get('/', (_req, res) => {
-    res.json({ status: 'ok', version: '0.1.0' });
+    res.json({ status: 'ok', version: '0.1.0', wsConnections: getConnectionCount() });
   });
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', version: '0.1.0' });
+    res.json({ status: 'ok', version: '0.1.0', wsConnections: getConnectionCount() });
   });
 
   const server = app.listen(PORT, () => {
     console.log(`[Server] API running on http://localhost:${PORT}`);
   });
+
+  // WebSocket relay — attach to the HTTP server for upgrade handling
+  createWebSocketServer(server);
 
   // Telegram Bot
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
