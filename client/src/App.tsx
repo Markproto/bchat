@@ -9,6 +9,7 @@ import { encryptMessage, decryptMessage } from "./crypto/e2ee.ts";
 import { initKeyPair, getKeyPair, clearKeyPair, fetchRecipientKey } from "./crypto/keyManager.ts";
 import { sendMessage } from "./api/messages.ts";
 import { getMyTrustProfile, type TrustProfile } from "./api/trust.ts";
+import { createTicket as apiCreateTicket, getMyTickets, requestVerification, type SupportTicket } from "./api/support.ts";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -99,18 +100,7 @@ interface Alert {
   time: number;
 }
 
-interface Ticket {
-  id: string;
-  number: number;
-  subject: string;
-  status: string;
-  priority: string;
-  category: string;
-  admin: string;
-  adminFp: string;
-  adminVerified: boolean;
-  created: string;
-}
+// Ticket type is now SupportTicket from api/support.ts
 
 // ME is now derived from auth state inside the app component.
 // This default is only used as a fallback for components that render before auth loads.
@@ -140,10 +130,7 @@ const MOCK_ALERTS: Alert[] = [
   { id: "a2", sender: "SketchyDave", severity: "HIGH", message: "Be cautious of links from new contacts.", pattern: "Suspicious Link", time: Date.now() - 86400000 },
 ];
 
-const MOCK_TICKETS: Ticket[] = [
-  { id: "t1", number: 1042, subject: "Can't verify my device", status: "verified", priority: "normal", category: "technical", admin: "Admin_Mark", adminFp: "A7F2:3B91:E4C8", adminVerified: true, created: new Date(Date.now() - 259200000).toISOString() },
-  { id: "t2", number: 1043, subject: "Suspicious DM from cloned account", status: "assigned", priority: "high", category: "security", admin: "Carol_Mod", adminFp: CONTACTS[3].fp, adminVerified: false, created: new Date(Date.now() - 86400000).toISOString() },
-];
+// Mock tickets removed — SupportTab now fetches from /api/support/tickets
 
 // ===================== COMPONENTS =====================
 
@@ -419,7 +406,49 @@ function TrustTab({ me, profile }: { me: User; profile: TrustProfile | null }) {
 function SupportTab() {
   const [sel, setSel] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
+  const [subject, setSubject] = useState("");
+  const [category, setCategory] = useState("general");
+  const [priority, setPriority] = useState("normal");
+  const [submitting, setSubmitting] = useState(false);
   const statusColors: Record<string, string> = { open: T.warn, assigned: T.warn, pending_verification: T.warn, verified: T.accent, resolved: T.muted, closed: T.muted };
+
+  // Fetch tickets on mount
+  useEffect(() => {
+    getMyTickets()
+      .then(res => setTickets(res.tickets))
+      .catch(() => {})
+      .finally(() => setLoadingTickets(false));
+  }, []);
+
+  async function handleSubmit() {
+    if (!subject.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await apiCreateTicket(category, subject.trim(), priority);
+      setTickets(prev => [res.ticket, ...prev]);
+      setSubject("");
+      setCategory("general");
+      setPriority("normal");
+      setShowNew(false);
+    } catch {
+      // TODO: show error toast
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleVerify(ticketId: string) {
+    try {
+      await requestVerification(ticketId);
+      // Refresh ticket list to get updated status
+      const res = await getMyTickets();
+      setTickets(res.tickets);
+    } catch {
+      // Verification may fail if no admin assigned yet
+    }
+  }
 
   if (showNew) return (
     <div style={{ flex: 1, padding: 20 }}>
@@ -429,16 +458,16 @@ function SupportTab() {
       </div>
       <Card>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div><label style={{ fontSize: 11, color: T.muted, display: "block", marginBottom: 4 }}>Subject</label><Input placeholder="Describe your issue..." /></div>
+          <div><label style={{ fontSize: 11, color: T.muted, display: "block", marginBottom: 4 }}>Subject</label><Input placeholder="Describe your issue..." value={subject} onChange={e => setSubject((e.target as HTMLInputElement).value)} /></div>
           <div>
             <label style={{ fontSize: 11, color: T.muted, display: "block", marginBottom: 4 }}>Category</label>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{["account", "security", "billing", "technical", "report_user", "general"].map(c => <Btn key={c} variant="ghost" small>{c}</Btn>)}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{["account", "security", "billing", "technical", "report_user", "general"].map(c => <Btn key={c} variant={c === category ? "primary" : "ghost"} small onClick={() => setCategory(c)}>{c}</Btn>)}</div>
           </div>
           <div>
             <label style={{ fontSize: 11, color: T.muted, display: "block", marginBottom: 4 }}>Priority</label>
-            <div style={{ display: "flex", gap: 6 }}>{["low", "normal", "high", "urgent"].map(p => <Btn key={p} variant="ghost" small>{p}</Btn>)}</div>
+            <div style={{ display: "flex", gap: 6 }}>{["low", "normal", "high", "urgent"].map(p => <Btn key={p} variant={p === priority ? "primary" : "ghost"} small onClick={() => setPriority(p)}>{p}</Btn>)}</div>
           </div>
-          <Btn onClick={() => setShowNew(false)}>Submit Ticket</Btn>
+          <Btn onClick={handleSubmit} disabled={submitting || !subject.trim()}>{submitting ? "Submitting..." : "Submit Ticket"}</Btn>
         </div>
       </Card>
     </div>
@@ -450,50 +479,57 @@ function SupportTab() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}><TicketIcon size={22} color={T.accent} /><span style={{ fontWeight: 700, fontSize: 18, color: T.text }}>Support Tickets</span></div>
         <Btn onClick={() => setShowNew(true)} small>New Ticket</Btn>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {MOCK_TICKETS.map(t => (
-          <Card key={t.id} style={{ cursor: "pointer" }} onClick={() => setSel(sel === t.id ? null : t.id)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: T.text }}>#{t.number}</span>
-                  <Badge text={t.status.toUpperCase()} color={statusColors[t.status] || T.muted} />
-                  <Badge text={t.priority} color={t.priority === "urgent" ? T.danger : t.priority === "high" ? T.warn : T.muted} />
-                  <Badge text={t.category} color={T.muted} />
-                </div>
-                <p style={{ fontSize: 13, color: T.text, margin: 0 }}>{t.subject}</p>
-                <p style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>Opened {timeAgo(t.created)}</p>
-              </div>
-              {t.admin && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Avatar fp={t.adminFp} size={28} verified={t.adminVerified} />
-                  <div>
-                    <p style={{ fontSize: 11, color: T.text, margin: 0, fontWeight: 600 }}>{t.admin}</p>
-                    {t.adminVerified
-                      ? <span style={{ fontSize: 9, color: T.accent }}>Cryptographically Verified</span>
-                      : <span style={{ fontSize: 9, color: T.warn }}>Pending verification</span>}
+      {loadingTickets ? (
+        <p style={{ color: T.muted, fontSize: 13, textAlign: "center", marginTop: 40 }}>Loading tickets...</p>
+      ) : tickets.length === 0 ? (
+        <p style={{ color: T.muted, fontSize: 13, textAlign: "center", marginTop: 40 }}>No tickets yet. Tap "New Ticket" to get help.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {tickets.map(t => (
+            <Card key={t.id} style={{ cursor: "pointer" }} onClick={() => setSel(sel === t.id ? null : t.id)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: T.text }}>#{t.ticketNumber}</span>
+                    <Badge text={t.status.toUpperCase()} color={statusColors[t.status] || T.muted} />
+                    <Badge text={t.priority} color={t.priority === "urgent" ? T.danger : t.priority === "high" ? T.warn : T.muted} />
+                    <Badge text={t.category} color={T.muted} />
                   </div>
+                  <p style={{ fontSize: 13, color: T.text, margin: 0 }}>{t.subject}</p>
+                  <p style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>Opened {timeAgo(t.createdAt)}</p>
                 </div>
-              )}
-            </div>
-            {sel === t.id && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
-                {t.adminVerified ? (
-                  <div style={{ padding: 10, background: T.accent + "11", borderRadius: 8, border: `1px solid ${T.accent}33` }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}><CheckIcon size={14} color={T.accent} /><span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>Admin Identity Verified</span></div>
-                    <p style={{ fontSize: 10, color: T.muted, marginTop: 4, fontFamily: "monospace" }}>Chain: Creator &rarr; {t.admin} | ed25519 signature valid</p>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Btn small variant="ghost">Verify Admin</Btn>
-                    <Btn small variant="ghost">View Messages</Btn>
+                {t.assignedAdminId && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Avatar fp={genFp()} size={28} verified={t.adminVerified} />
+                    <div>
+                      <p style={{ fontSize: 11, color: T.text, margin: 0, fontWeight: 600 }}>Admin</p>
+                      {t.adminVerified
+                        ? <span style={{ fontSize: 9, color: T.accent }}>Cryptographically Verified</span>
+                        : <span style={{ fontSize: 9, color: T.warn }}>Pending verification</span>}
+                    </div>
                   </div>
                 )}
               </div>
-            )}
-          </Card>
-        ))}
-      </div>
+              {sel === t.id && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+                  {t.adminVerified ? (
+                    <div style={{ padding: 10, background: T.accent + "11", borderRadius: 8, border: `1px solid ${T.accent}33` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}><CheckIcon size={14} color={T.accent} /><span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>Admin Identity Verified</span></div>
+                      <p style={{ fontSize: 10, color: T.muted, marginTop: 4, fontFamily: "monospace" }}>ed25519 challenge-response verified at {t.verifiedAt ? new Date(t.verifiedAt).toLocaleString() : "N/A"}</p>
+                    </div>
+                  ) : t.assignedAdminId ? (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Btn small variant="ghost" onClick={() => handleVerify(t.id)}>Verify Admin</Btn>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: 11, color: T.muted }}>Waiting for admin assignment...</p>
+                  )}
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
