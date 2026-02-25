@@ -4,7 +4,10 @@ import TeamSpec from "./TeamSpec.tsx";
 import LandingPage from "./LandingPage.tsx";
 import LoginScreen from "./LoginScreen.tsx";
 import { useAuth } from "./context/AuthContext.tsx";
-import { useWebSocket, type WsEvent } from "./hooks/useWebSocket.ts";
+import { useWebSocket, type WsEvent, type WsNewMessage } from "./hooks/useWebSocket.ts";
+import { encryptMessage, decryptMessage } from "./crypto/e2ee.ts";
+import { initKeyPair, getKeyPair, clearKeyPair, fetchRecipientKey } from "./crypto/keyManager.ts";
+import { sendMessage } from "./api/messages.ts";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -597,32 +600,42 @@ export default function BchatApp() {
     ? { id: user.userId, username: user.username, fp: genFp(), trustScore: 0.92, isAdmin: false, isVerifiedAdmin: false }
     : DEFAULT_ME;
 
-  // ── WebSocket: live message delivery ──────────────────────
+  // ── E2EE keypair: init on login ────────────────────────────
+  useEffect(() => {
+    if (user) {
+      initKeyPair().catch(() => {
+        // Key registration may fail if server is down; keypair is still usable locally
+      });
+    }
+  }, [user]);
+
+  // ── WebSocket: live message delivery with decryption ──────
   const handleWsEvent = useCallback((event: WsEvent) => {
     if (event.type === "new_message") {
-      // Map the WS envelope into our local Message shape.
-      // In a real E2EE flow the ciphertext would be decrypted first;
-      // for now we show the ciphertext placeholder so the bubble renders.
+      const e = event as WsNewMessage;
+      const kp = getKeyPair();
+      const plaintext = kp
+        ? decryptMessage(e.ciphertext, e.nonce, e.senderPublicKey, kp)
+        : null;
+
       setMsgs(prev => {
-        const convId = event.senderId; // mock contacts are keyed by sender ID
+        const convId = e.senderId; // mock contacts are keyed by sender ID
         const existing = prev[convId] || [];
-        // De-dup in case we receive the same message twice
-        if (existing.some(m => m.id === event.messageId)) return prev;
+        if (existing.some(m => m.id === e.messageId)) return prev;
         return {
           ...prev,
           [convId]: [
             ...existing,
             {
-              id: event.messageId,
-              sender: event.senderId,
-              text: "[encrypted]", // placeholder — decrypt with NaCl in production
-              time: new Date(event.createdAt).getTime(),
+              id: e.messageId,
+              sender: e.senderId,
+              text: plaintext ?? "[decryption failed]",
+              time: new Date(e.createdAt).getTime(),
             },
           ],
         };
       });
     }
-    // message_sent / typing events can be handled here in future phases
   }, []);
 
   useWebSocket(handleWsEvent);
@@ -637,15 +650,38 @@ export default function BchatApp() {
 
   const unreadTotal = CONTACTS.reduce((a, c) => a + c.unread, 0);
 
-  function handleSend(text: string) {
+  async function handleSend(text: string) {
     if (!selChat) return;
+
+    // Optimistic local update
+    const tempId = "m" + Date.now();
     setMsgs(prev => ({
       ...prev,
-      [selChat]: [...(prev[selChat] || []), { id: "m" + Date.now(), sender: ME.id, text, time: Date.now() }],
+      [selChat]: [...(prev[selChat] || []), { id: tempId, sender: ME.id, text, time: Date.now() }],
     }));
+
+    // Encrypt and send via API
+    const kp = getKeyPair();
+    if (kp) {
+      try {
+        const recipientPubKey = await fetchRecipientKey(selChat);
+        const envelope = encryptMessage(text, recipientPubKey, kp);
+        await sendMessage({
+          recipient_id: selChat,
+          ciphertext: envelope.ciphertext,
+          nonce: envelope.nonce,
+          sender_public_key: envelope.senderPublicKey,
+          message_type: "text",
+          content: text, // plaintext hint for server-side scam detection
+        });
+      } catch {
+        // Message still appears locally; mark as failed in a future iteration
+      }
+    }
   }
 
   function handleLogout() {
+    clearKeyPair();
     logout();
     setOverlay("landing");
     setTab("chats");
