@@ -90,14 +90,23 @@ CREATE INDEX IF NOT EXISTS idx_flags_unresolved
   ON community_flags(target_user_id) WHERE resolved = false;
 
 -- Prevent duplicate flags in cooldown window (enforced at app level too)
-CREATE UNIQUE INDEX IF NOT EXISTS idx_flags_cooldown
-  ON community_flags(flagger_id, target_user_id, (created_at::date));
+-- Note: date-based dedup is handled at the application layer since
+-- ::date casts are timezone-dependent and can't be used in indexes.
+CREATE INDEX IF NOT EXISTS idx_flags_cooldown
+  ON community_flags(flagger_id, target_user_id, created_at);
 
 -- ===================== INVITE CODES =====================
--- Add revoked columns if not present from earlier phases
+-- Add revoked columns if not present from earlier phases.
+-- Base schema uses "invites" table; some phases used "invite_codes".
 DO $$ BEGIN
-  ALTER TABLE invite_codes ADD COLUMN IF NOT EXISTS revoked BOOLEAN DEFAULT false;
-  ALTER TABLE invite_codes ADD COLUMN IF NOT EXISTS revoked_reason TEXT;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invites') THEN
+    ALTER TABLE invites ADD COLUMN IF NOT EXISTS revoked BOOLEAN DEFAULT false;
+    ALTER TABLE invites ADD COLUMN IF NOT EXISTS revoked_reason TEXT;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invite_codes') THEN
+    ALTER TABLE invite_codes ADD COLUMN IF NOT EXISTS revoked BOOLEAN DEFAULT false;
+    ALTER TABLE invite_codes ADD COLUMN IF NOT EXISTS revoked_reason TEXT;
+  END IF;
 END $$;
 
 -- ===================== MESSAGES TABLE (for activity scoring) =====================
