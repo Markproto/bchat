@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import AdminGuide from "./AdminGuide.tsx";
 import TeamSpec from "./TeamSpec.tsx";
 import LandingPage from "./LandingPage.tsx";
 import LoginScreen from "./LoginScreen.tsx";
 import { useAuth } from "./context/AuthContext.tsx";
+import { useWebSocket, type WsEvent } from "./hooks/useWebSocket.ts";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -595,6 +596,37 @@ export default function BchatApp() {
   const ME: User = user
     ? { id: user.userId, username: user.username, fp: genFp(), trustScore: 0.92, isAdmin: false, isVerifiedAdmin: false }
     : DEFAULT_ME;
+
+  // ── WebSocket: live message delivery ──────────────────────
+  const handleWsEvent = useCallback((event: WsEvent) => {
+    if (event.type === "new_message") {
+      // Map the WS envelope into our local Message shape.
+      // In a real E2EE flow the ciphertext would be decrypted first;
+      // for now we show the ciphertext placeholder so the bubble renders.
+      setMsgs(prev => {
+        const convId = event.senderId; // mock contacts are keyed by sender ID
+        const existing = prev[convId] || [];
+        // De-dup in case we receive the same message twice
+        if (existing.some(m => m.id === event.messageId)) return prev;
+        return {
+          ...prev,
+          [convId]: [
+            ...existing,
+            {
+              id: event.messageId,
+              sender: event.senderId,
+              text: "[encrypted]", // placeholder — decrypt with NaCl in production
+              time: new Date(event.createdAt).getTime(),
+            },
+          ],
+        };
+      });
+    }
+    // message_sent / typing events can be handled here in future phases
+  }, []);
+
+  useWebSocket(handleWsEvent);
+  // ──────────────────────────────────────────────────────────
 
   // When user logs in successfully, dismiss the login overlay
   useEffect(() => {
