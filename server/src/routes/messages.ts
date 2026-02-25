@@ -20,6 +20,7 @@ import { scanMessage } from "../scam/detector";
 import { createRateLimit } from "../middleware/rateLimit";
 import { query } from "../db/pool";
 import { logger } from "../utils/logger";
+import { broadcastToUser } from "../ws";
 
 const router = Router();
 
@@ -181,6 +182,30 @@ router.post(
           [msg.id, req.user!.id, recipient_id]
         );
       }
+
+      // Push encrypted envelope to recipient via WebSocket (real-time delivery)
+      broadcastToUser(recipient_id, {
+        type: 'new_message',
+        messageId: msg.id,
+        conversationId,
+        senderId: req.user!.id,
+        ciphertext,
+        nonce,
+        senderPublicKey: sender_public_key,
+        contentType: message_type || 'text',
+        sequenceNum: msg.sequence_num,
+        createdAt: msg.created_at,
+      });
+
+      // Also notify sender's other devices so they stay in sync
+      broadcastToUser(req.user!.id, {
+        type: 'message_sent',
+        messageId: msg.id,
+        conversationId,
+        recipientId: recipient_id,
+        sequenceNum: msg.sequence_num,
+        createdAt: msg.created_at,
+      });
 
       res.status(201).json({
         messageId: msg.id,
