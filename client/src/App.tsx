@@ -8,6 +8,7 @@ import { useWebSocket, type WsEvent, type WsNewMessage } from "./hooks/useWebSoc
 import { encryptMessage, decryptMessage } from "./crypto/e2ee.ts";
 import { initKeyPair, getKeyPair, clearKeyPair, fetchRecipientKey } from "./crypto/keyManager.ts";
 import { sendMessage } from "./api/messages.ts";
+import { getMyTrustProfile, type TrustProfile } from "./api/trust.ts";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -370,14 +371,16 @@ function AlertsTab() {
 }
 
 // ===================== TRUST TAB =====================
-function TrustTab({ me }: { me: User }) {
+function TrustTab({ me, profile }: { me: User; profile: TrustProfile | null }) {
+  const score = profile?.trustScore ?? me.trustScore;
+  const accountDays = profile ? Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / 86_400_000) : 0;
   const stats = [
-    { label: "Invites Sent", val: "12", color: T.accent },
-    { label: "Invitees Banned", val: "0", color: T.accent },
-    { label: "Community Flags", val: "0", color: T.accent },
-    { label: "Messages (30d)", val: "247", color: T.accent },
-    { label: "Inviter Trust", val: "0.95", color: T.accent },
-    { label: "Can Invite", val: "Yes", color: T.accent },
+    { label: "Invite Depth", val: profile ? String(profile.inviteDepth) : "--", color: T.accent },
+    { label: "Community Flags", val: profile ? String(profile.flagCount) : "--", color: profile && profile.flagCount > 0 ? T.warn : T.accent },
+    { label: "Can Invite", val: profile ? (profile.canInvite ? "Yes" : "No") : "--", color: profile?.canInvite ? T.accent : T.danger },
+    { label: "Admin", val: profile ? (profile.isVerifiedAdmin ? "Verified" : profile.isAdmin ? "Yes" : "No") : "--", color: profile?.isVerifiedAdmin ? T.accent : T.muted },
+    { label: "Invited By", val: profile?.invitedBy ?? "--", color: T.muted },
+    { label: "Account Age", val: profile ? `${accountDays}d` : "--", color: T.accent },
   ];
   return (
     <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
@@ -388,14 +391,14 @@ function TrustTab({ me }: { me: User }) {
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontWeight: 700, fontSize: 18, color: T.text }}>{me.username}</span>
-              <Badge text={me.trustScore >= 0.8 ? "Trusted" : me.trustScore >= 0.5 ? "Caution" : "Warning"} color={me.trustScore >= 0.8 ? T.accent : me.trustScore >= 0.5 ? T.warn : T.danger} />
+              <Badge text={score >= 0.8 ? "Trusted" : score >= 0.5 ? "Caution" : "Warning"} color={score >= 0.8 ? T.accent : score >= 0.5 ? T.warn : T.danger} />
             </div>
             <span style={{ fontSize: 11, color: T.muted, fontFamily: "monospace" }}>{me.fp}</span>
             <div style={{ marginTop: 8, height: 8, background: T.input, borderRadius: 4, overflow: "hidden" }}>
-              <div style={{ height: "100%", borderRadius: 4, width: `${me.trustScore * 100}%`, background: T.accent, transition: "all .3s" }} />
+              <div style={{ height: "100%", borderRadius: 4, width: `${score * 100}%`, background: T.accent, transition: "all .3s" }} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 10, color: T.muted }}>
-              <span>Trust Score: {me.trustScore}</span><span>Account age: 180 days</span>
+              <span>Trust Score: {score.toFixed(2)}</span><span>Account age: {accountDays} days</span>
             </div>
           </div>
         </div>
@@ -594,18 +597,27 @@ export default function BchatApp() {
   const [selChat, setSelChat] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Record<string, Message[]>>(MOCK_MSGS);
   const [overlay, setOverlay] = useState<"landing" | "login" | "guide" | "spec" | null>("landing");
+  const [trustProfile, setTrustProfile] = useState<TrustProfile | null>(null);
 
-  // Build ME from auth state, falling back to default for demo data
+  // Build ME from auth state + live trust profile
   const ME: User = user
-    ? { id: user.userId, username: user.username, fp: genFp(), trustScore: 0.92, isAdmin: false, isVerifiedAdmin: false }
+    ? {
+        id: user.userId,
+        username: user.username,
+        fp: genFp(),
+        trustScore: trustProfile?.trustScore ?? 0,
+        isAdmin: trustProfile?.isAdmin ?? false,
+        isVerifiedAdmin: trustProfile?.isVerifiedAdmin ?? false,
+      }
     : DEFAULT_ME;
 
-  // ── E2EE keypair: init on login ────────────────────────────
+  // ── Init on login: E2EE keypair + trust profile ─────────────
   useEffect(() => {
     if (user) {
-      initKeyPair().catch(() => {
-        // Key registration may fail if server is down; keypair is still usable locally
-      });
+      initKeyPair().catch(() => {});
+      getMyTrustProfile()
+        .then(res => setTrustProfile(res.profile))
+        .catch(() => {});
     }
   }, [user]);
 
@@ -749,7 +761,7 @@ export default function BchatApp() {
       {tab === "contacts" && <ContactsTab contacts={CONTACTS} />}
       {tab === "alerts" && <AlertsTab />}
       {tab === "support" && <SupportTab />}
-      {tab === "trust" && <TrustTab me={ME} />}
+      {tab === "trust" && <TrustTab me={ME} profile={trustProfile} />}
       {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} me={ME} onLogout={handleLogout} />}
     </div>
   );
