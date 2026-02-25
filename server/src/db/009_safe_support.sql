@@ -15,50 +15,24 @@ END $$;
 CREATE SEQUENCE IF NOT EXISTS ticket_number_seq START 1000;
 
 -- ===================== SUPPORT TICKETS =====================
--- Every support interaction happens INSIDE bchat.
--- No DMs from "support" accounts. No external channels.
-CREATE TABLE IF NOT EXISTS support_tickets (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  ticket_number     INTEGER UNIQUE NOT NULL DEFAULT nextval('ticket_number_seq'),
-  user_id           UUID NOT NULL REFERENCES users(id),
-  assigned_admin_id UUID REFERENCES users(id),
+-- The base schema already creates support_tickets. Add Phase 9 columns.
+DO $$ BEGIN
+  ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS ticket_number INTEGER UNIQUE;
+  ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS admin_verified BOOLEAN DEFAULT false;
+  ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ;
+  ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'normal';
+  ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'general';
+  ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+  ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
+END $$;
 
-  -- Verification state
-  admin_verified    BOOLEAN DEFAULT false,
-  verified_at       TIMESTAMPTZ,
-
-  -- Ticket metadata
-  status            TEXT NOT NULL DEFAULT 'open'
-                    CHECK (status IN (
-                      'open', 'assigned', 'pending_verification',
-                      'verified', 'resolved', 'closed'
-                    )),
-  priority          TEXT NOT NULL DEFAULT 'normal'
-                    CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
-  category          TEXT NOT NULL
-                    CHECK (category IN (
-                      'account', 'security', 'billing',
-                      'technical', 'report_user', 'general'
-                    )),
-  subject           TEXT NOT NULL,
-
-  -- Timestamps
-  created_at        TIMESTAMPTZ DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ DEFAULT NOW(),
-  resolved_at       TIMESTAMPTZ,
-  closed_at         TIMESTAMPTZ
-);
-
+-- Use "assigned_admin" (base schema column name)
 CREATE INDEX IF NOT EXISTS idx_tickets_user
   ON support_tickets(user_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_admin
-  ON support_tickets(assigned_admin_id);
+  ON support_tickets(assigned_admin);
 CREATE INDEX IF NOT EXISTS idx_tickets_status
   ON support_tickets(status) WHERE status NOT IN ('resolved', 'closed');
-CREATE INDEX IF NOT EXISTS idx_tickets_priority
-  ON support_tickets(priority, updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_tickets_number
-  ON support_tickets(ticket_number);
 
 -- ===================== TICKET MESSAGES =====================
 -- E2EE messages within a ticket. Separate from DM messages.
