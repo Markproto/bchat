@@ -10,7 +10,12 @@
 import { Pool, PoolConfig } from 'pg';
 
 const rawUrl = process.env.DATABASE_URL || 'postgresql://bchat:bchat@localhost:5432/bchat';
-const isRemoteDb = !rawUrl.includes('localhost') && !rawUrl.includes('127.0.0.1');
+
+// DATABASE_SSL env var overrides auto-detection (needed for Docker where hostname is "db")
+const sslEnv = process.env.DATABASE_SSL;
+const isRemoteDb = sslEnv !== undefined
+  ? sslEnv === 'true'
+  : !rawUrl.includes('localhost') && !rawUrl.includes('127.0.0.1');
 
 // Strip sslmode from connection string — we manage SSL via the pool config.
 // Leaving sslmode in the URL causes node-postgres to create a TLS connection

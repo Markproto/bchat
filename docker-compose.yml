@@ -21,6 +21,7 @@ services:
       context: ./server
     environment:
       DATABASE_URL: postgresql://bchat:${DB_PASSWORD}@db:5432/bchat
+      DATABASE_SSL: "false"
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       PORT: "8080"
