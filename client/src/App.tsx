@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import AdminGuide from "./AdminGuide.tsx";
 import TeamSpec from "./TeamSpec.tsx";
 import LandingPage from "./LandingPage.tsx";
+import LoginScreen from "./LoginScreen.tsx";
+import { useAuth } from "./context/AuthContext.tsx";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -105,7 +107,9 @@ interface Ticket {
   created: string;
 }
 
-const ME: User = { id: "u1", username: "CryptoKing99", fp: genFp(), trustScore: 0.92, isAdmin: false, isVerifiedAdmin: false };
+// ME is now derived from auth state inside the app component.
+// This default is only used as a fallback for components that render before auth loads.
+const DEFAULT_ME: User = { id: "u1", username: "Guest", fp: genFp(), trustScore: 0, isAdmin: false, isVerifiedAdmin: false };
 
 const CONTACTS: Contact[] = [
   { id: "u2", username: "Alice_Dev", fp: genFp(), trustScore: 0.88, isAdmin: false, isVerifiedAdmin: true, unread: 2, lastMsg: "Hey, did you see the update?", lastAt: new Date(Date.now() - 3600000).toISOString(), cooling: false, coolHrs: 0 },
@@ -232,7 +236,7 @@ function ChatList({ contacts, selected, onSelect }: { contacts: Contact[]; selec
 }
 
 // ===================== CHAT VIEW =====================
-function ChatView({ contact, messages, onSend }: { contact: Contact | undefined; messages: Message[] | undefined; onSend: (text: string) => void }) {
+function ChatView({ contact, messages, onSend, meId }: { contact: Contact | undefined; messages: Message[] | undefined; onSend: (text: string) => void; meId: string }) {
   const [input, setInput] = useState("");
   const [scamWarning, setScamWarning] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -302,7 +306,7 @@ function ChatView({ contact, messages, onSend }: { contact: Contact | undefined;
           <p style={{ color: T.muted, fontSize: 10, marginTop: 4 }}>Messages are end-to-end encrypted. Only you and {contact.username} can read them.</p>
         </div>
         {(messages || []).map(m => {
-          const mine = m.sender === ME.id;
+          const mine = m.sender === meId;
           return (
             <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
               <div style={{ maxWidth: "70%", padding: "8px 12px", borderRadius: mine ? "12px 12px 2px 12px" : "12px 12px 12px 2px", background: mine ? "rgba(0,210,106,0.15)" : T.card, border: `1px solid ${mine ? "rgba(0,210,106,0.2)" : T.border}` }}>
@@ -362,7 +366,7 @@ function AlertsTab() {
 }
 
 // ===================== TRUST TAB =====================
-function TrustTab() {
+function TrustTab({ me }: { me: User }) {
   const stats = [
     { label: "Invites Sent", val: "12", color: T.accent },
     { label: "Invitees Banned", val: "0", color: T.accent },
@@ -376,18 +380,18 @@ function TrustTab() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}><ShieldIcon size={22} color={T.accent} /><span style={{ fontWeight: 700, fontSize: 18, color: T.text }}>My Trust Profile</span></div>
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <Avatar fp={ME.fp} size={56} />
+          <Avatar fp={me.fp} size={56} />
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontWeight: 700, fontSize: 18, color: T.text }}>{ME.username}</span>
-              <Badge text={ME.trustScore >= 0.8 ? "Trusted" : ME.trustScore >= 0.5 ? "Caution" : "Warning"} color={ME.trustScore >= 0.8 ? T.accent : ME.trustScore >= 0.5 ? T.warn : T.danger} />
+              <span style={{ fontWeight: 700, fontSize: 18, color: T.text }}>{me.username}</span>
+              <Badge text={me.trustScore >= 0.8 ? "Trusted" : me.trustScore >= 0.5 ? "Caution" : "Warning"} color={me.trustScore >= 0.8 ? T.accent : me.trustScore >= 0.5 ? T.warn : T.danger} />
             </div>
-            <span style={{ fontSize: 11, color: T.muted, fontFamily: "monospace" }}>{ME.fp}</span>
+            <span style={{ fontSize: 11, color: T.muted, fontFamily: "monospace" }}>{me.fp}</span>
             <div style={{ marginTop: 8, height: 8, background: T.input, borderRadius: 4, overflow: "hidden" }}>
-              <div style={{ height: "100%", borderRadius: 4, width: `${ME.trustScore * 100}%`, background: T.accent, transition: "all .3s" }} />
+              <div style={{ height: "100%", borderRadius: 4, width: `${me.trustScore * 100}%`, background: T.accent, transition: "all .3s" }} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 10, color: T.muted }}>
-              <span>Trust Score: {ME.trustScore}</span><span>Account age: 180 days</span>
+              <span>Trust Score: {me.trustScore}</span><span>Account age: 180 days</span>
             </div>
           </div>
         </div>
@@ -521,20 +525,21 @@ function ContactsTab({ contacts }: { contacts: Contact[] }) {
 }
 
 // ===================== SETTINGS TAB =====================
-function SettingsTab({ onOpenGuide, onOpenSpec }: { onOpenGuide: () => void; onOpenSpec: () => void }) {
+function SettingsTab({ onOpenGuide, onOpenSpec, me, onLogout }: { onOpenGuide: () => void; onOpenSpec: () => void; me: User; onLogout: () => void }) {
   return (
     <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}><SettingsIcon size={22} color={T.accent} /><span style={{ fontWeight: 700, fontSize: 18, color: T.text }}>Settings</span></div>
       <Card style={{ marginBottom: 10 }}>
         <p style={{ fontWeight: 600, fontSize: 13, color: T.text, marginBottom: 8 }}>Account</p>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <Avatar fp={ME.fp} size={48} />
+          <Avatar fp={me.fp} size={48} />
           <div>
-            <p style={{ fontWeight: 700, fontSize: 15, color: T.text, margin: 0 }}>{ME.username}</p>
-            <p style={{ fontSize: 10, color: T.muted, fontFamily: "monospace", margin: "4px 0" }}>{ME.fp}</p>
-            <Badge text={`Trust ${ME.trustScore}`} color={T.accent} />
+            <p style={{ fontWeight: 700, fontSize: 15, color: T.text, margin: 0 }}>{me.username}</p>
+            <p style={{ fontSize: 10, color: T.muted, fontFamily: "monospace", margin: "4px 0" }}>{me.fp}</p>
+            <Badge text={`Trust ${me.trustScore}`} color={T.accent} />
           </div>
         </div>
+        <Btn onClick={onLogout} variant="danger" small style={{ marginTop: 4 }}>Log Out</Btn>
       </Card>
       <Card style={{ marginBottom: 10 }}>
         <p style={{ fontWeight: 600, fontSize: 13, color: T.text, marginBottom: 8 }}>Security</p>
@@ -580,10 +585,23 @@ function SettingsTab({ onOpenGuide, onOpenSpec }: { onOpenGuide: () => void; onO
 
 // ===================== MAIN APP =====================
 export default function BchatApp() {
+  const { user, loading, logout } = useAuth();
   const [tab, setTab] = useState("chats");
   const [selChat, setSelChat] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Record<string, Message[]>>(MOCK_MSGS);
-  const [overlay, setOverlay] = useState<"landing" | "guide" | "spec" | null>("landing");
+  const [overlay, setOverlay] = useState<"landing" | "login" | "guide" | "spec" | null>("landing");
+
+  // Build ME from auth state, falling back to default for demo data
+  const ME: User = user
+    ? { id: user.userId, username: user.username, fp: genFp(), trustScore: 0.92, isAdmin: false, isVerifiedAdmin: false }
+    : DEFAULT_ME;
+
+  // When user logs in successfully, dismiss the login overlay
+  useEffect(() => {
+    if (user && overlay === "login") {
+      setOverlay(null);
+    }
+  }, [user, overlay]);
 
   const unreadTotal = CONTACTS.reduce((a, c) => a + c.unread, 0);
 
@@ -595,7 +613,23 @@ export default function BchatApp() {
     }));
   }
 
+  function handleLogout() {
+    logout();
+    setOverlay("landing");
+    setTab("chats");
+    setSelChat(null);
+  }
+
   const contact = CONTACTS.find(c => c.id === selChat);
+
+  // Loading spinner while restoring session
+  if (loading) {
+    return (
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg, color: T.accent, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" }}>
+        <p style={{ fontSize: 14 }}>Loading...</p>
+      </div>
+    );
+  }
 
   // Full-screen overlays
   if (overlay === "landing") {
@@ -603,9 +637,19 @@ export default function BchatApp() {
       <LandingPage
         onOpenGuide={() => setOverlay("guide")}
         onOpenSpec={() => setOverlay("spec")}
-        onOpenApp={() => setOverlay(null)}
+        onOpenApp={() => {
+          // If already logged in, go straight to app. Otherwise, show login.
+          if (user) {
+            setOverlay(null);
+          } else {
+            setOverlay("login");
+          }
+        }}
       />
     );
+  }
+  if (overlay === "login") {
+    return <LoginScreen onBack={() => setOverlay("landing")} />;
   }
   if (overlay === "guide") {
     return (
@@ -622,18 +666,23 @@ export default function BchatApp() {
     );
   }
 
+  // If somehow at main app without auth, redirect to login
+  if (!user) {
+    return <LoginScreen onBack={() => setOverlay("landing")} />;
+  }
+
   return (
     <div style={{ height: "100vh", display: "flex", background: T.bg, color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
       <Sidebar activeTab={tab} setTab={setTab} unreadTotal={unreadTotal} alertCount={MOCK_ALERTS.length} />
       {tab === "chats" && <>
         <ChatList contacts={CONTACTS} selected={selChat} onSelect={id => { setSelChat(id); setTab("chats"); }} />
-        <ChatView contact={contact} messages={msgs[selChat || ""]} onSend={handleSend} />
+        <ChatView contact={contact} messages={msgs[selChat || ""]} onSend={handleSend} meId={ME.id} />
       </>}
       {tab === "contacts" && <ContactsTab contacts={CONTACTS} />}
       {tab === "alerts" && <AlertsTab />}
       {tab === "support" && <SupportTab />}
-      {tab === "trust" && <TrustTab />}
-      {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} />}
+      {tab === "trust" && <TrustTab me={ME} />}
+      {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} me={ME} onLogout={handleLogout} />}
     </div>
   );
 }
