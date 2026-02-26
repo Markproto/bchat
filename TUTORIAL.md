@@ -10,14 +10,15 @@ A step-by-step guide to deploying, configuring, and operating bchat — from Tel
 2. [Telegram Bot Creation](#2-telegram-bot-creation)
 3. [First Admin (Creator) Setup — Security Deep Dive](#3-first-admin-creator-setup--security-deep-dive)
 4. [Inviting Your First Users](#4-inviting-your-first-users)
-5. [Promoting Sub-Admins](#5-promoting-sub-admins)
-6. [Understanding the Trust Engine](#6-understanding-the-trust-engine)
-7. [AI Scam Detection — How It Works](#7-ai-scam-detection--how-it-works)
-8. [Contact Cooling Periods](#8-contact-cooling-periods)
-9. [End-to-End Encryption](#9-end-to-end-encryption)
-10. [Support Ticket System](#10-support-ticket-system)
-11. [Day-to-Day Admin Operations](#11-day-to-day-admin-operations)
-12. [Future Versatility — Beyond Chat](#12-future-versatility--beyond-chat)
+5. [Trusted Room Auto-Access](#5-trusted-room-auto-access)
+6. [Promoting Sub-Admins](#6-promoting-sub-admins)
+7. [Understanding the Trust Engine](#7-understanding-the-trust-engine)
+8. [AI Scam Detection — How It Works](#8-ai-scam-detection--how-it-works)
+9. [Contact Cooling Periods](#9-contact-cooling-periods)
+10. [End-to-End Encryption](#10-end-to-end-encryption)
+11. [Support Ticket System](#11-support-ticket-system)
+12. [Day-to-Day Admin Operations](#12-day-to-day-admin-operations)
+13. [Future Versatility — Beyond Chat](#13-future-versatility--beyond-chat)
 
 ---
 
@@ -143,6 +144,9 @@ Account created -> JWT issued -> user is in
 | `/start` | Anyone | Shows welcome message; if sent with invite code payload, marks invite as used |
 | `/invite` | Admins | Generates an 8-character invite code (expires 24h) |
 | `/verify` | Anyone | Checks if the user's Telegram join has been recorded |
+| `/trustroom enable YYYY-MM-DD` | Admins | Designates the current group as a trusted room with a membership cutoff date |
+| `/trustroom disable` | Admins | Deactivates the trusted room |
+| `/trustroom status` | Admins | Shows trusted room status, cutoff date, and admission count |
 
 ---
 
@@ -296,7 +300,158 @@ This creates **accountability**. If User_C turns out to be a scammer:
 
 ---
 
-## 5. Promoting Sub-Admins
+## 5. Trusted Room Auto-Access
+
+### What It Is
+
+Trusted rooms let admins designate an existing Telegram group as a "trusted source" for bchat. Members of that group who joined **before a cutoff date** can register on bchat without needing a personal invite code. This is ideal for onboarding established communities where individual invite codes would be impractical.
+
+### Key Concept: Membership Cutoff Date
+
+When enabling a trusted room, the admin **must** specify a cutoff date. This is critical for security:
+
+- Members who joined the Telegram group **before** the cutoff date → auto-access to bchat
+- Members who joined the Telegram group **after** the cutoff date → must get a regular invite code
+
+This prevents someone from seeing that a Telegram group grants bchat access, joining it after the fact, and getting in without being vetted.
+
+### How to Enable a Trusted Room
+
+#### Via Telegram Bot (Recommended)
+
+Run the command directly in the Telegram group you want to designate:
+
+```
+/trustroom enable 2026-02-25
+```
+
+The date `2026-02-25` is the cutoff. Only members who joined the group before February 25, 2026 get auto-access. The bot will confirm:
+
+```
+Trusted room enabled!
+
+Name: Alpha Traders VIP
+Cutoff: 2026-02-25 (only members who joined before this date get auto-access)
+Trust score: 0.4
+Member cap: Unlimited
+```
+
+#### Via API
+
+```
+POST /api/trusted-rooms
+Authorization: Bearer <admin_jwt>
+{
+  "source_type": "telegram",
+  "telegram_chat_id": -1001234567890,
+  "name": "Alpha Traders VIP",
+  "membership_cutoff": "2026-02-25T23:59:59.999Z",
+  "default_trust_score": 0.40,
+  "max_members": 0
+}
+```
+
+### How Auto-Access Works
+
+```
+Admin runs /trustroom enable 2026-02-25
+    |
+    v
+User joins Telegram group
+    |
+    v
+Bot records join event (with timestamp)
+    |
+    v
+Bot checks: is this group a trusted room?
+    |
+    v
+Yes → check user's join date vs cutoff
+    |
+    v
+Joined BEFORE cutoff?
+  Yes → mark join event with trusted::room_id
+        DM user: "You have auto-access to bchat!"
+  No  → ignore (user needs a regular invite code)
+    |
+    v
+User opens bchat app, registers normally
+    |
+    v
+Auth route detects trusted:: code
+  → verifies room is active
+  → verifies join date < cutoff
+  → creates account with trust_score = 0.40
+  → records admission in trusted_room_admissions table
+```
+
+### Trust Score Difference
+
+| Admission Type | Starting Trust Score | Why |
+|---------------|---------------------|-----|
+| Personal invite code | 0.50 | Someone personally vouched for this user |
+| Trusted room | 0.40 | Group-level trust — nobody vouched individually |
+
+Trusted room users start 10 points lower because being in a Telegram group is a weaker signal than a personal invitation.
+
+### Cascade Accountability
+
+When a trusted-room user gets banned, the cascade penalty flows to the **admin who created the trusted room** (since there's no personal inviter). The penalties are dampened to **50%** of normal levels:
+
+```
+Banned trusted-room user: trust_score = 0 (account deactivated)
+    |
+    Level 1 (room creator): -7.5% trust score (50% of normal 15%)
+    |
+    Level 2 (creator's inviter): -4% (50% of normal 8%)
+    |
+    Level 3 (three levels up): -2% (50% of normal 4%)
+```
+
+This creates the right incentive: admins should only trust rooms they genuinely trust, because their trust score is at stake.
+
+### Safety Mechanisms
+
+| Mechanism | What It Does |
+|-----------|-------------|
+| **Membership cutoff** | Only pre-existing members qualify — no gaming the system after the fact |
+| **Member cap** | Set `max_members` to limit how many users can be auto-admitted (0 = unlimited) |
+| **Auto-deactivation** | If 3+ users from a room get banned, the room is automatically deactivated |
+| **Manual deactivation** | `/trustroom disable` or `POST /api/trusted-rooms/:id/deactivate` |
+| **All protections apply** | Cooling periods, scam detection, device binding, impersonation checks — nothing is bypassed |
+
+### Managing Trusted Rooms
+
+#### Bot Commands
+
+| Command | What It Does |
+|---------|-------------|
+| `/trustroom enable YYYY-MM-DD` | Designate current group as trusted with cutoff date |
+| `/trustroom disable` | Deactivate the trusted room |
+| `/trustroom status` | Show room status, cutoff date, admitted count |
+
+#### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/trusted-rooms` | POST | Create a trusted room |
+| `/api/trusted-rooms` | GET | List all trusted rooms |
+| `/api/trusted-rooms/:id` | GET | Get room details |
+| `/api/trusted-rooms/:id` | PUT | Update settings (trust score, cap, cutoff) |
+| `/api/trusted-rooms/:id/deactivate` | POST | Deactivate a room |
+| `/api/trusted-rooms/:id/reactivate` | POST | Reactivate a room |
+| `/api/trusted-rooms/:id/admissions` | GET | List all users admitted via this room |
+
+### What Happens If a Trusted Room Is Compromised
+
+1. **Immediate deactivation**: Run `/trustroom disable` in Telegram or call the deactivate API. All future auto-admissions stop instantly.
+2. **Existing users are NOT auto-banned**: Many legitimate users may already be on the platform. Mass-banning would be destructive.
+3. **Review admissions**: Use `GET /api/trusted-rooms/:id/admissions` to see all users admitted via the room. Selectively ban suspicious accounts.
+4. **Auto-deactivation**: If you don't catch it manually, the system auto-deactivates after 3 banned members from the same room.
+
+---
+
+## 6. Promoting Sub-Admins
 
 ### When to Promote
 
@@ -366,7 +521,7 @@ POST /api/admin/revoke
 
 ---
 
-## 6. Understanding the Trust Engine
+## 7. Understanding the Trust Engine
 
 ### How Trust Scores Work
 
@@ -420,7 +575,7 @@ POST /api/trust/flag
 
 ---
 
-## 7. AI Scam Detection — How It Works
+## 8. AI Scam Detection — How It Works
 
 ### The Detection Pipeline
 
@@ -558,7 +713,7 @@ Use this to see which patterns are catching real scams vs generating noise.
 
 ---
 
-## 8. Contact Cooling Periods
+## 9. Contact Cooling Periods
 
 ### What It Is
 
@@ -608,7 +763,7 @@ This backdates the contact pair so the cooling period is instantly expired. Use 
 
 ---
 
-## 9. End-to-End Encryption
+## 10. End-to-End Encryption
 
 ### How E2EE Works in bchat
 
@@ -665,7 +820,7 @@ The ciphertext (which IS stored) cannot be decrypted by the server. This gives y
 
 ---
 
-## 10. Support Ticket System
+## 11. Support Ticket System
 
 ### How It Works
 
@@ -709,7 +864,7 @@ This is the killer feature. When an admin is assigned to your ticket:
 
 ---
 
-## 11. Day-to-Day Admin Operations
+## 12. Day-to-Day Admin Operations
 
 ### Banning a User
 
@@ -783,7 +938,7 @@ Shows platform-wide metrics: total users, average trust score, ban count, etc.
 
 ---
 
-## 12. Future Versatility — Beyond Chat
+## 13. Future Versatility — Beyond Chat
 
 bchat's architecture is designed to extend far beyond simple messaging. The security primitives — identity verification, trust scoring, cooling periods, and pattern detection — can protect any interaction, not just text chat.
 
@@ -864,6 +1019,11 @@ The patterns you add to catch "send me your seed phrase" today are the same engi
 | `/api/scam/patterns` | GET/POST/PUT/DELETE | JWT (Admin) | Manage detection patterns |
 | `/api/support/tickets` | GET/POST | JWT | Support tickets |
 | `/api/invites/create` | POST | JWT (Admin) | Generate invite code |
+| `/api/trusted-rooms` | POST | JWT (Verified Admin) | Create a trusted room |
+| `/api/trusted-rooms` | GET | JWT (Verified Admin) | List all trusted rooms |
+| `/api/trusted-rooms/:id` | PUT | JWT (Verified Admin) | Update trusted room settings |
+| `/api/trusted-rooms/:id/deactivate` | POST | JWT (Verified Admin) | Deactivate a trusted room |
+| `/api/trusted-rooms/:id/admissions` | GET | JWT (Verified Admin) | List users admitted via room |
 | `/api/messages/send` | POST | JWT | Send encrypted message |
 | `/api/messages/cooling/:id` | GET | JWT | Check cooling status |
 | `/api/messages/cooling/:id/exempt` | POST | JWT (Admin) | Exempt from cooling |
