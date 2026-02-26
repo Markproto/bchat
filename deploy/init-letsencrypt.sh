@@ -81,16 +81,21 @@ if ! docker compose exec nginx nginx -t 2>/dev/null; then
 fi
 echo "  nginx is ready."
 
-# Step 4: Request real certificate from Let's Encrypt
+# Step 4: Delete dummy cert and request real one from Let's Encrypt
+# nginx already loaded the dummy cert into memory, so deleting the files is safe.
+# certbot needs the live/ directory to not exist so it can manage it.
 echo "[4/5] Requesting Let's Encrypt certificate..."
+docker compose run --rm --entrypoint "sh" certbot -c "\
+  rm -rf /etc/letsencrypt/live/$CERT_NAME && \
+  rm -rf /etc/letsencrypt/archive/$CERT_NAME && \
+  rm -rf /etc/letsencrypt/renewal/$CERT_NAME.conf"
 docker compose run --rm --entrypoint "sh" certbot -c "\
   certbot certonly --webroot -w /var/www/certbot \
     --cert-name $CERT_NAME \
     -d $DOMAIN \
     --email $EMAIL \
     --agree-tos \
-    --no-eff-email \
-    --force-renewal"
+    --no-eff-email"
 echo "  Done."
 
 # Step 5: Reload nginx to use the real certificate
