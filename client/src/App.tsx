@@ -10,6 +10,7 @@ import { initKeyPair, getKeyPair, clearKeyPair, fetchRecipientKey } from "./cryp
 import { sendMessage } from "./api/messages.ts";
 import { getMyTrustProfile, type TrustProfile } from "./api/trust.ts";
 import { createTicket as apiCreateTicket, getMyTickets, requestVerification, type SupportTicket } from "./api/support.ts";
+import { getMyAlerts, dismissAlert as apiDismissAlert, type ScamAlert } from "./api/scam.ts";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -91,14 +92,7 @@ interface Message {
   time: number;
 }
 
-interface Alert {
-  id: string;
-  sender: string;
-  severity: string;
-  message: string;
-  pattern: string;
-  time: number;
-}
+// Alert type is now ScamAlert from api/scam.ts
 
 // Ticket type is now SupportTicket from api/support.ts
 
@@ -125,10 +119,7 @@ const MOCK_MSGS: Record<string, Message[]> = {
   ],
 };
 
-const MOCK_ALERTS: Alert[] = [
-  { id: "a1", sender: "Unknown_X99", severity: "CRITICAL", message: "NEVER share your seed phrase with anyone.", pattern: "Seed Phrase Request", time: Date.now() - 1800000 },
-  { id: "a2", sender: "SketchyDave", severity: "HIGH", message: "Be cautious of links from new contacts.", pattern: "Suspicious Link", time: Date.now() - 86400000 },
-];
+// Mock alerts removed — AlertsTab now fetches from /api/scam/alerts
 
 // Mock tickets removed — SupportTab now fetches from /api/support/tickets
 
@@ -320,8 +311,7 @@ function ChatView({ contact, messages, onSend, meId }: { contact: Contact | unde
 }
 
 // ===================== ALERTS TAB =====================
-function AlertsTab() {
-  const [alerts, setAlerts] = useState(MOCK_ALERTS);
+function AlertsTab({ alerts, onDismiss }: { alerts: ScamAlert[]; onDismiss: (id: string) => void }) {
   return (
     <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
@@ -340,13 +330,12 @@ function AlertsTab() {
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                       <Badge text={a.severity} color={col} />
-                      <span style={{ fontSize: 11, color: T.muted }}>from <strong style={{ color: T.text }}>{a.sender}</strong></span>
-                      <span style={{ fontSize: 10, color: T.muted }}>{timeAgo(String(a.time))}</span>
+                      <span style={{ fontSize: 11, color: T.muted }}>from <strong style={{ color: T.text }}>{a.senderId}</strong></span>
+                      <span style={{ fontSize: 10, color: T.muted }}>{timeAgo(a.createdAt)}</span>
                     </div>
-                    <p style={{ fontSize: 13, color: T.text, margin: 0 }}>{a.message}</p>
-                    <p style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>Pattern: {a.pattern}</p>
+                    <p style={{ fontSize: 13, color: T.text, margin: 0 }}>{a.alertMessage}</p>
                   </div>
-                  <button onClick={() => setAlerts(s => s.filter(x => x.id !== a.id))} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><XIcon size={14} color={T.muted} /></button>
+                  <button onClick={() => onDismiss(a.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><XIcon size={14} color={T.muted} /></button>
                 </div>
               </Card>
             );
@@ -634,6 +623,7 @@ export default function BchatApp() {
   const [msgs, setMsgs] = useState<Record<string, Message[]>>(MOCK_MSGS);
   const [overlay, setOverlay] = useState<"landing" | "login" | "guide" | "spec" | null>("landing");
   const [trustProfile, setTrustProfile] = useState<TrustProfile | null>(null);
+  const [scamAlerts, setScamAlerts] = useState<ScamAlert[]>([]);
 
   // Build ME from auth state + live trust profile
   const ME: User = user
@@ -647,15 +637,23 @@ export default function BchatApp() {
       }
     : DEFAULT_ME;
 
-  // ── Init on login: E2EE keypair + trust profile ─────────────
+  // ── Init on login: E2EE keypair + trust profile + alerts ────
   useEffect(() => {
     if (user) {
       initKeyPair().catch(() => {});
       getMyTrustProfile()
         .then(res => setTrustProfile(res.profile))
         .catch(() => {});
+      getMyAlerts()
+        .then(res => setScamAlerts(res.alerts))
+        .catch(() => {});
     }
   }, [user]);
+
+  function handleDismissAlert(alertId: string) {
+    setScamAlerts(prev => prev.filter(a => a.id !== alertId));
+    apiDismissAlert(alertId).catch(() => {});
+  }
 
   // ── WebSocket: live message delivery with decryption ──────
   const handleWsEvent = useCallback((event: WsEvent) => {
@@ -789,13 +787,13 @@ export default function BchatApp() {
 
   return (
     <div style={{ height: "100vh", display: "flex", background: T.bg, color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
-      <Sidebar activeTab={tab} setTab={setTab} unreadTotal={unreadTotal} alertCount={MOCK_ALERTS.length} />
+      <Sidebar activeTab={tab} setTab={setTab} unreadTotal={unreadTotal} alertCount={scamAlerts.length} />
       {tab === "chats" && <>
         <ChatList contacts={CONTACTS} selected={selChat} onSelect={id => { setSelChat(id); setTab("chats"); }} />
         <ChatView contact={contact} messages={msgs[selChat || ""]} onSend={handleSend} meId={ME.id} />
       </>}
       {tab === "contacts" && <ContactsTab contacts={CONTACTS} />}
-      {tab === "alerts" && <AlertsTab />}
+      {tab === "alerts" && <AlertsTab alerts={scamAlerts} onDismiss={handleDismissAlert} />}
       {tab === "support" && <SupportTab />}
       {tab === "trust" && <TrustTab me={ME} profile={trustProfile} />}
       {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} me={ME} onLogout={handleLogout} />}
