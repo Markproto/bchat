@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import AdminGuide from "./AdminGuide.tsx";
 import TeamSpec from "./TeamSpec.tsx";
+import TutorialPopup from "./TutorialPopup.tsx";
 import LandingPage from "./LandingPage.tsx";
 import LoginScreen from "./LoginScreen.tsx";
 import { useAuth } from "./context/AuthContext.tsx";
@@ -564,7 +565,7 @@ function ContactsTab({ contacts }: { contacts: Contact[] }) {
 }
 
 // ===================== SETTINGS TAB =====================
-function SettingsTab({ onOpenGuide, onOpenSpec, me, onLogout, canInvite }: { onOpenGuide: () => void; onOpenSpec: () => void; me: User; onLogout: () => void; canInvite: boolean }) {
+function SettingsTab({ onOpenGuide, onOpenSpec, onOpenTutorial, me, onLogout, canInvite }: { onOpenGuide: () => void; onOpenSpec: () => void; onOpenTutorial: () => void; me: User; onLogout: () => void; canInvite: boolean }) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [invitesLoaded, setInvitesLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -685,6 +686,16 @@ function SettingsTab({ onOpenGuide, onOpenSpec, me, onLogout, canInvite }: { onO
             </div>
             <span style={{ color: T.muted, fontSize: 14 }}>&rarr;</span>
           </button>
+          <button onClick={onOpenTutorial} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: T.input, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", width: "100%" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>🎓</span>
+              <div style={{ textAlign: "left" }}>
+                <p style={{ fontWeight: 600, fontSize: 13, color: T.text, margin: 0 }}>Interactive Tutorial</p>
+                <p style={{ fontSize: 10, color: T.muted, margin: "2px 0 0" }}>Scroll through every feature — setup to daily operations</p>
+              </div>
+            </div>
+            <span style={{ color: T.muted, fontSize: 14 }}>&rarr;</span>
+          </button>
         </div>
       </Card>
       <Card>
@@ -703,6 +714,7 @@ export default function BchatApp() {
   const [selChat, setSelChat] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Record<string, Message[]>>(MOCK_MSGS);
   const [overlay, setOverlay] = useState<"landing" | "login" | "guide" | "spec" | null>("landing");
+  const [showTutorial, setShowTutorial] = useState(false);
   const [trustProfile, setTrustProfile] = useState<TrustProfile | null>(null);
   const [scamAlerts, setScamAlerts] = useState<ScamAlert[]>([]);
   const [coolingInfo, setCoolingInfo] = useState<Record<string, { hoursRemaining: number; expiresAt: string }>>({});
@@ -863,18 +875,22 @@ export default function BchatApp() {
   // Full-screen overlays
   if (overlay === "landing") {
     return (
-      <LandingPage
-        onOpenGuide={() => setOverlay("guide")}
-        onOpenSpec={() => setOverlay("spec")}
-        onOpenApp={() => {
-          // If already logged in, go straight to app. Otherwise, show login.
-          if (user) {
-            setOverlay(null);
-          } else {
-            setOverlay("login");
-          }
-        }}
-      />
+      <>
+        <LandingPage
+          onOpenGuide={() => setOverlay("guide")}
+          onOpenSpec={() => setOverlay("spec")}
+          onOpenTutorial={() => setShowTutorial(true)}
+          onOpenApp={() => {
+            // If already logged in, go straight to app. Otherwise, show login.
+            if (user) {
+              setOverlay(null);
+            } else {
+              setOverlay("login");
+            }
+          }}
+        />
+        {showTutorial && <TutorialPopup onClose={() => setShowTutorial(false)} />}
+      </>
     );
   }
   if (overlay === "login") {
@@ -911,7 +927,8 @@ export default function BchatApp() {
       {tab === "alerts" && <AlertsTab alerts={scamAlerts} onDismiss={handleDismissAlert} />}
       {tab === "support" && <SupportTab />}
       {tab === "trust" && <TrustTab me={ME} profile={trustProfile} />}
-      {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} me={ME} onLogout={handleLogout} canInvite={trustProfile?.canInvite ?? false} />}
+      {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} onOpenTutorial={() => setShowTutorial(true)} me={ME} onLogout={handleLogout} canInvite={trustProfile?.canInvite ?? false} />}
+      {showTutorial && <TutorialPopup onClose={() => setShowTutorial(false)} />}
     </div>
   );
 }

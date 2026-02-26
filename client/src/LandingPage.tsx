@@ -25,10 +25,11 @@ const LAYERS = [
 ];
 
 // ===================== MAIN COMPONENT =====================
-export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp }: {
+export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpenTutorial }: {
   onOpenGuide: () => void;
   onOpenSpec: () => void;
   onOpenApp: () => void;
+  onOpenTutorial?: () => void;
 }) {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
@@ -74,6 +75,17 @@ export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp }: {
           >
             Read the Guide
           </button>
+          {onOpenTutorial && (
+            <button
+              onClick={onOpenTutorial}
+              style={{
+                padding: "14px 32px", background: "rgba(255,255,255,0.06)", color: T.text, border: `1px solid ${T.border}`,
+                borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 15, fontFamily: "inherit", transition: "all .15s",
+              }}
+            >
+              Take the Tour
+            </button>
+          )}
         </div>
       </div>
 
