@@ -21,6 +21,7 @@ import trustRoutes from './routes/trust';
 import scamRoutes from './routes/scam';
 import messageRoutes from './routes/messages';
 import supportRoutes from './routes/support';
+import trustedRoomRoutes from './routes/trustedRooms';
 import { createBot } from './bot';
 import { rateLimit } from './middleware/rateLimit';
 import { createWebSocketServer, getConnectionCount } from './ws';
@@ -49,6 +50,7 @@ async function main() {
   app.use('/api/scam', rateLimit({ points: 30, duration: 60 }), scamRoutes);
   app.use('/api/messages', rateLimit({ points: 60, duration: 60 }), messageRoutes);
   app.use('/api/support', rateLimit({ points: 20, duration: 60 }), supportRoutes);
+  app.use('/api/trusted-rooms', rateLimit({ points: 20, duration: 60 }), trustedRoomRoutes);
 
   // Health check
   app.get('/', (_req, res) => {

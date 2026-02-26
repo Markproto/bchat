@@ -14,6 +14,12 @@
 import { Telegraf, Context } from 'telegraf';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../db/pool';
+import {
+  getTrustedRoomByTelegramChat,
+  createTrustedRoom,
+  deactivateTrustedRoom,
+  getTrustedRoom,
+} from '../trustedRooms/engine';
 
 export interface InviteRecord {
   code: string;
@@ -54,6 +60,50 @@ export function createBot(token: string): Telegraf {
         [user.id, user.username || null, user.first_name]
       );
       console.log(`[Bot] User joined: ${user.id} (@${user.username || 'no_username'})`);
+
+      // Check if this group is a trusted room
+      try {
+        const chatId = update.chat.id;
+        const trustedRoom = await getTrustedRoomByTelegramChat(chatId);
+        if (trustedRoom) {
+          // Get the user's join timestamp from the event we just recorded
+          const joinRecord = await query(
+            'SELECT joined_at FROM telegram_join_events WHERE telegram_user_id = $1',
+            [user.id]
+          );
+          const joinedAt = joinRecord.rows[0]?.joined_at;
+          const cutoff = new Date(trustedRoom.membershipCutoff);
+
+          if (joinedAt && new Date(joinedAt) < cutoff) {
+            // Check member cap
+            if (trustedRoom.maxMembers === 0 || trustedRoom.admittedCount < trustedRoom.maxMembers) {
+              // Mark the join event with the trusted room synthetic invite code
+              await query(
+                `UPDATE telegram_join_events SET invite_code = $1
+                 WHERE telegram_user_id = $2`,
+                [`trusted::${trustedRoom.id}`, user.id]
+              );
+              console.log(`[Bot] User ${user.id} qualifies for trusted room "${trustedRoom.name}" (joined before cutoff)`);
+
+              // Try to send a DM to the user
+              try {
+                await ctx.telegram.sendMessage(
+                  user.id,
+                  `You have auto-access to bchat via the trusted group "${trustedRoom.name}"!\n\n` +
+                  `Open the bchat app and tap "Connect Telegram" to set up your account.\n` +
+                  `No invite code needed.`
+                );
+              } catch {
+                // DM may fail if user hasn't started the bot — that's OK
+              }
+            }
+          } else {
+            console.log(`[Bot] User ${user.id} joined after cutoff for trusted room "${trustedRoom.name}" — no auto-access`);
+          }
+        }
+      } catch (err: any) {
+        console.error(`[Bot] Trusted room check failed for user ${user.id}:`, err.message);
+      }
     }
   });
 
@@ -122,6 +172,115 @@ export function createBot(token: string): Telegraf {
       `Invite created!\n\nShare this link:\n${inviteLink}\n\n` +
       `Code: ${code}\nExpires in 24 hours.`
     );
+  });
+
+  // /trustroom command — admins manage trusted room designation
+  bot.command('trustroom', async (ctx) => {
+    const args = ctx.message.text.split(/\s+/).slice(1);
+    const subcommand = args[0]?.toLowerCase();
+
+    // Look up calling user's bchat account
+    const bchatUser = await query(
+      "SELECT id, role FROM users WHERE telegram_id = $1",
+      [ctx.from.id]
+    );
+    if (bchatUser.rows.length === 0 || !['admin', 'creator'].includes(bchatUser.rows[0].role)) {
+      ctx.reply('Only bchat admins can use /trustroom.');
+      return;
+    }
+    const adminId = bchatUser.rows[0].id;
+    const chatId = ctx.chat.id;
+
+    if (subcommand === 'enable') {
+      const dateArg = args[1]; // YYYY-MM-DD
+      if (!dateArg || !/^\d{4}-\d{2}-\d{2}$/.test(dateArg)) {
+        ctx.reply(
+          'Usage: /trustroom enable YYYY-MM-DD\n\n' +
+          'The date is the membership cutoff — only members who joined this group BEFORE that date get auto-access.\n\n' +
+          'Example: /trustroom enable 2026-02-25'
+        );
+        return;
+      }
+
+      const cutoff = new Date(dateArg + 'T23:59:59.999Z');
+      if (isNaN(cutoff.getTime())) {
+        ctx.reply('Invalid date. Use YYYY-MM-DD format.');
+        return;
+      }
+
+      try {
+        const existing = await getTrustedRoomByTelegramChat(chatId);
+        if (existing) {
+          ctx.reply(`This group is already a trusted room ("${existing.name}").`);
+          return;
+        }
+
+        const chatInfo = await ctx.telegram.getChat(chatId);
+        const chatTitle = ('title' in chatInfo ? chatInfo.title : null) || 'Untitled Group';
+
+        const room = await createTrustedRoom(adminId, {
+          sourceType: 'telegram',
+          telegramChatId: chatId,
+          name: chatTitle,
+          membershipCutoff: cutoff.toISOString(),
+        });
+
+        ctx.reply(
+          `Trusted room enabled!\n\n` +
+          `Name: ${room.name}\n` +
+          `Cutoff: ${dateArg} (only members who joined before this date get auto-access)\n` +
+          `Trust score: ${room.defaultTrustScore}\n` +
+          `Member cap: ${room.maxMembers === 0 ? 'Unlimited' : room.maxMembers}`
+        );
+      } catch (err: any) {
+        ctx.reply(`Failed to enable trusted room: ${err.message}`);
+      }
+
+    } else if (subcommand === 'disable') {
+      try {
+        const room = await getTrustedRoomByTelegramChat(chatId);
+        if (!room) {
+          ctx.reply('This group is not a trusted room.');
+          return;
+        }
+
+        await deactivateTrustedRoom(room.id, adminId, 'Disabled via /trustroom command');
+        ctx.reply(`Trusted room "${room.name}" has been deactivated. No new auto-admissions.`);
+      } catch (err: any) {
+        ctx.reply(`Failed to disable: ${err.message}`);
+      }
+
+    } else if (subcommand === 'status') {
+      try {
+        const room = await query(
+          'SELECT * FROM trusted_rooms WHERE telegram_chat_id = $1 ORDER BY created_at DESC LIMIT 1',
+          [chatId]
+        );
+        if (room.rows.length === 0) {
+          ctx.reply('This group is not a trusted room.');
+          return;
+        }
+        const r = room.rows[0];
+        const cutoffDate = new Date(r.membership_cutoff).toISOString().split('T')[0];
+        ctx.reply(
+          `Trusted Room: ${r.name}\n` +
+          `Status: ${r.is_active ? 'Active' : 'Deactivated'}\n` +
+          `Cutoff date: ${cutoffDate}\n` +
+          `Admitted: ${r.admitted_count}${r.max_members > 0 ? ` / ${r.max_members}` : ''}\n` +
+          `Trust score: ${parseFloat(r.default_trust_score).toFixed(2)}`
+        );
+      } catch (err: any) {
+        ctx.reply(`Failed to get status: ${err.message}`);
+      }
+
+    } else {
+      ctx.reply(
+        'Usage:\n' +
+        '/trustroom enable YYYY-MM-DD — Mark this group as trusted (date = membership cutoff)\n' +
+        '/trustroom disable — Deactivate trusted room\n' +
+        '/trustroom status — Show current status'
+      );
+    }
   });
 
   // /verify command — user requests verification status

@@ -20,6 +20,7 @@ import { checkNameImpersonation } from '../crypto/homoglyph';
 import { getJoinEvent } from '../bot';
 import { query } from '../db/pool';
 import { v4 as uuidv4 } from 'uuid';
+import { getTrustedRoom, recordAdmission } from '../trustedRooms/engine';
 
 const router = Router();
 const challengeStore = new ChallengeStore(query);
@@ -77,9 +78,40 @@ router.post('/telegram', async (req: Request, res: Response) => {
       userId = uuidv4();
       isNewUser = true;
 
+      // Check if this is a trusted room admission
+      const effectiveInviteCode = joinEvent.inviteCode || inviteCode;
+      let admissionSource = 'invite';
+      let trustedRoomId: string | null = null;
+      let trustScore = 0.5;
+      let invitedBy: string | null = null;
+
+      if (effectiveInviteCode && effectiveInviteCode.startsWith('trusted::')) {
+        const roomId = effectiveInviteCode.replace('trusted::', '');
+        const room = await getTrustedRoom(roomId);
+
+        if (room && room.isActive) {
+          // Verify the user joined before the cutoff
+          if (joinEvent.joinedAt && new Date(joinEvent.joinedAt) < new Date(room.membershipCutoff)) {
+            admissionSource = 'trusted_room';
+            trustedRoomId = room.id;
+            trustScore = room.defaultTrustScore;
+            invitedBy = room.createdBy; // Room creator absorbs cascade responsibility
+          } else {
+            return res.status(403).json({
+              error: 'You joined after the membership cutoff date for this trusted room. You need a personal invite code.',
+            });
+          }
+        } else {
+          return res.status(403).json({
+            error: 'This trusted room is no longer active. You need a personal invite code.',
+          });
+        }
+      }
+
       await query(
-        `INSERT INTO users (id, telegram_id, telegram_username, first_name, last_name, identity_pubkey)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO users (id, telegram_id, telegram_username, first_name, last_name,
+         identity_pubkey, trust_score, admission_source, trusted_room_id, invited_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           userId,
           telegramUser.id,
@@ -87,11 +119,20 @@ router.post('/telegram', async (req: Request, res: Response) => {
           telegramUser.first_name,
           telegramUser.last_name,
           identityKey.publicKey,
+          trustScore,
+          admissionSource,
+          trustedRoomId,
+          invitedBy,
         ]
       );
 
-      // Record invite usage
-      if (inviteCode) {
+      // Record trusted room admission
+      if (admissionSource === 'trusted_room' && trustedRoomId) {
+        await recordAdmission(trustedRoomId, userId, telegramUser.id);
+      }
+
+      // Record invite usage (for non-trusted-room admissions)
+      if (admissionSource === 'invite' && inviteCode) {
         const invite = await query(
           'SELECT created_by FROM invites WHERE code = $1 AND used_by IS NULL',
           [inviteCode]
@@ -111,6 +152,8 @@ router.post('/telegram', async (req: Request, res: Response) => {
         [userId, 'user_created', JSON.stringify({
           telegramId: telegramUser.id,
           inviteCode: inviteCode || null,
+          admissionSource,
+          trustedRoomId,
         }), req.ip]
       );
     }

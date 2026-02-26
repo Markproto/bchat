@@ -110,11 +110,36 @@ const SLIDES: Slide[] = [
     ],
   },
 
-  // ── 5. Promoting Sub-Admins ────────────────────────────────
+  // ── 5. Trusted Rooms ──────────────────────────────────────
+  {
+    id: "trusted-rooms",
+    icon: "\u{1F3E0}",
+    title: "Step 4b \u2014 Trusted Rooms",
+    subtitle: "Admins can designate Telegram groups as trusted sources. Members who joined before a cutoff date get auto-access \u2014 no personal invite code needed.",
+    bullets: [
+      { label: "Membership cutoff", detail: "Only members who joined the Telegram group BEFORE the admin-set cutoff date qualify. Post-cutoff joins need a regular invite." },
+      { label: "Lower trust score", detail: "Trusted-room users start at 0.40 (vs 0.50 for personally invited users) \u2014 nobody vouched for them individually." },
+      { label: "Room creator accountability", detail: "If a trusted-room user gets banned, cascade penalties flow to the admin who created the trusted room (at 50% dampening)." },
+      { label: "Auto-deactivation", detail: "If 3+ users from a trusted room get banned, the room is automatically deactivated as a safety measure." },
+    ],
+    diagram: [
+      "Admin runs /trustroom enable 2026-02-25",
+      "\u2193",
+      "Bot checks each joiner's join date vs cutoff",
+      "\u2193",
+      "Joined BEFORE cutoff \u2192 auto-access granted",
+      "Joined AFTER cutoff  \u2192 invite code required",
+      "\u2193",
+      "All protections still apply: cooling, scam detection, device binding",
+    ],
+    tip: "Trusted room users go through the same 72-hour cooling period and AI scam detection as everyone else. Auto-access only skips the invite code.",
+  },
+
+  // ── 6. Promoting Sub-Admins ────────────────────────────────
   {
     id: "sub-admins",
     icon: "\u{1F46E}",
-    title: "Step 4 \u2014 Promoting Sub-Admins",
+    title: "Step 5 \u2014 Promoting Sub-Admins",
     subtitle: "Admin promotion requires a cryptographic signature. You sign a statement saying 'I vouch for this person' with your private key.",
     bullets: [
       { label: "Signed payload", detail: "targetUserId | targetPubkey | role | timestamp \u2014 signed with promoter's ed25519 key" },

@@ -194,6 +194,36 @@ const SECTIONS: Section[] = [
       },
     ],
   },
+  {
+    id: "trusted-rooms",
+    title: "Trusted Rooms",
+    icon: "8",
+    badge: "NEW",
+    badgeColor: T.accent,
+    description: "Auto-access from designated Telegram groups with membership cutoff enforcement.",
+    steps: [
+      {
+        title: "Designating a Trusted Room",
+        content: "Admins can designate a Telegram group as a trusted source via the /trustroom enable YYYY-MM-DD bot command or the POST /api/trusted-rooms API. The date is the membership cutoff: only users who joined the Telegram group BEFORE that date get auto-access to bchat. Anyone joining after must get a regular invite code.",
+        tips: ["Use /trustroom enable 2026-02-25 directly in the Telegram group.", "The cutoff date is required and cannot be omitted."],
+      },
+      {
+        title: "Managing Settings",
+        content: "Each trusted room has configurable settings: default trust score (default 0.40, lower than the standard 0.50), maximum member cap (0 = unlimited), and the membership cutoff date. Update these via PUT /api/trusted-rooms/:id or the admin dashboard.",
+        tips: ["Trust score changes only apply to future admissions, not retroactively.", "Set a member cap on large groups as a safety valve."],
+      },
+      {
+        title: "Monitoring & Safety",
+        content: "View all users admitted via a trusted room at GET /api/trusted-rooms/:id/admissions. If 3 or more users from a single room get banned, the room is automatically deactivated. You can also manually deactivate via /trustroom disable or POST /api/trusted-rooms/:id/deactivate.",
+        tips: ["Deactivation stops future auto-admissions but does NOT ban existing users.", "Review admissions regularly for suspicious patterns."],
+      },
+      {
+        title: "Cascade Accountability",
+        content: "The admin who created the trusted room absorbs cascade penalties when a trusted-room user is banned. Penalties are dampened to 50% of normal levels (e.g., 7.5% instead of 15% for direct inviter). This reflects the group-level nature of the trust decision versus a personal endorsement.",
+        tips: ["Only trust rooms you genuinely trust \u2014 your trust score is at stake.", "Auto-deactivation protects you from cascading damage if a room is compromised."],
+      },
+    ],
+  },
 ];
 
 // ===================== MAIN COMPONENT =====================

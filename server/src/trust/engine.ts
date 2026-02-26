@@ -6,6 +6,7 @@
  */
 
 import { query } from "../db/pool";
+import { checkAutoDeactivation } from "../trustedRooms/engine";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,15 @@ export async function banUser(
   // Cascade penalties up the invite chain
   const cascadeResults = await applyCascade(targetUserId);
 
+  // Check if the banned user was admitted via a trusted room — auto-deactivate if threshold reached
+  const bannedUserRoom = await query(
+    "SELECT trusted_room_id FROM users WHERE id = $1",
+    [targetUserId]
+  );
+  if (bannedUserRoom.rows[0]?.trusted_room_id) {
+    await checkAutoDeactivation(bannedUserRoom.rows[0].trusted_room_id);
+  }
+
   // Audit log
   await query(
     `INSERT INTO audit_log (user_id, event_type, details)
@@ -171,6 +181,14 @@ async function applyCascade(bannedUserId: string): Promise<CascadeResult[]> {
   const results: CascadeResult[] = [];
   let currentUserId = bannedUserId;
 
+  // Check if the banned user was admitted via a trusted room — apply dampened penalties
+  const bannedUserInfo = await query(
+    "SELECT admission_source FROM users WHERE id = $1",
+    [bannedUserId]
+  );
+  const dampeningFactor =
+    bannedUserInfo.rows[0]?.admission_source === "trusted_room" ? 0.5 : 1.0;
+
   for (let level = 1; level <= MAX_CASCADE_LEVELS; level++) {
     // Find who invited the current user
     const inviter = await query(
@@ -184,7 +202,8 @@ async function applyCascade(bannedUserId: string): Promise<CascadeResult[]> {
     if (inviter.rows.length === 0) break;
 
     const inviterRow = inviter.rows[0];
-    const penalty = CASCADE_PENALTIES[level] || 0;
+    const rawPenalty = CASCADE_PENALTIES[level] || 0;
+    const penalty = rawPenalty * dampeningFactor;
     const previousScore = parseFloat(inviterRow.trust_score);
     const newScore = Math.max(0, previousScore - penalty);
     const inviteRevoked = newScore < INVITE_REVOKE_THRESHOLD;
