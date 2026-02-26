@@ -12,6 +12,7 @@ import { ApiError } from "./api/client.ts";
 import { getMyTrustProfile, type TrustProfile } from "./api/trust.ts";
 import { createTicket as apiCreateTicket, getMyTickets, requestVerification, type SupportTicket } from "./api/support.ts";
 import { getMyAlerts, dismissAlert as apiDismissAlert, type ScamAlert } from "./api/scam.ts";
+import { createInvite, getMyInvites, type Invite } from "./api/invites.ts";
 
 // ===================== ICONS =====================
 interface IconProps {
@@ -563,7 +564,41 @@ function ContactsTab({ contacts }: { contacts: Contact[] }) {
 }
 
 // ===================== SETTINGS TAB =====================
-function SettingsTab({ onOpenGuide, onOpenSpec, me, onLogout }: { onOpenGuide: () => void; onOpenSpec: () => void; me: User; onLogout: () => void }) {
+function SettingsTab({ onOpenGuide, onOpenSpec, me, onLogout, canInvite }: { onOpenGuide: () => void; onOpenSpec: () => void; me: User; onLogout: () => void; canInvite: boolean }) {
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [invitesLoaded, setInvitesLoaded] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  // Fetch invite list when the section is relevant
+  useEffect(() => {
+    if (canInvite || me.isAdmin) {
+      getMyInvites()
+        .then(res => setInvites(res.invites))
+        .catch(() => {})
+        .finally(() => setInvitesLoaded(true));
+    }
+  }, [canInvite, me.isAdmin]);
+
+  async function handleCreateInvite() {
+    setCreating(true);
+    try {
+      const res = await createInvite();
+      setInvites(prev => [{ code: res.code, used_by: null, expires_at: res.expiresAt, created_at: new Date().toISOString() }, ...prev]);
+    } catch {
+      // Non-admin or trust too low
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function handleCopy(code: string) {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(code);
+      setTimeout(() => setCopied(null), 2000);
+    }).catch(() => {});
+  }
+
   return (
     <div style={{ flex: 1, padding: 20, overflowY: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}><SettingsIcon size={22} color={T.accent} /><span style={{ fontWeight: 700, fontSize: 18, color: T.text }}>Settings</span></div>
@@ -574,11 +609,51 @@ function SettingsTab({ onOpenGuide, onOpenSpec, me, onLogout }: { onOpenGuide: (
           <div>
             <p style={{ fontWeight: 700, fontSize: 15, color: T.text, margin: 0 }}>{me.username}</p>
             <p style={{ fontSize: 10, color: T.muted, fontFamily: "monospace", margin: "4px 0" }}>{me.fp}</p>
-            <Badge text={`Trust ${me.trustScore}`} color={T.accent} />
+            <Badge text={`Trust ${me.trustScore.toFixed(2)}`} color={T.accent} />
           </div>
         </div>
         <Btn onClick={onLogout} variant="danger" small style={{ marginTop: 4 }}>Log Out</Btn>
       </Card>
+      {/* Invite Management */}
+      {(canInvite || me.isAdmin) && (
+        <Card style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <p style={{ fontWeight: 600, fontSize: 13, color: T.text, margin: 0 }}>Invite Codes</p>
+            <Btn small onClick={handleCreateInvite} disabled={creating}>{creating ? "Creating..." : "Generate Code"}</Btn>
+          </div>
+          <p style={{ fontSize: 10, color: T.muted, marginBottom: 8 }}>Invite codes are single-use and expire after 24 hours. You are accountable for anyone you invite.</p>
+          {!invitesLoaded ? (
+            <p style={{ fontSize: 11, color: T.muted }}>Loading invites...</p>
+          ) : invites.length === 0 ? (
+            <p style={{ fontSize: 11, color: T.muted }}>No invites created yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {invites.map(inv => {
+                const expired = new Date(inv.expires_at) < new Date();
+                const used = !!inv.used_by;
+                const statusText = used ? "USED" : expired ? "EXPIRED" : "ACTIVE";
+                const statusColor = used ? T.muted : expired ? T.danger : T.accent;
+                return (
+                  <div key={inv.code} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: T.input, borderRadius: 8, border: `1px solid ${T.border}` }}>
+                    <div>
+                      <span style={{ fontFamily: "monospace", fontSize: 13, color: T.text, fontWeight: 600 }}>{inv.code}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                        <Badge text={statusText} color={statusColor} />
+                        <span style={{ fontSize: 9, color: T.muted }}>expires {timeAgo(inv.expires_at)}</span>
+                      </div>
+                    </div>
+                    {!used && !expired && (
+                      <Btn small variant="ghost" onClick={() => handleCopy(inv.code)}>
+                        {copied === inv.code ? "Copied!" : "Copy"}
+                      </Btn>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      )}
       <Card style={{ marginBottom: 10 }}>
         <p style={{ fontWeight: 600, fontSize: 13, color: T.text, marginBottom: 8 }}>Security</p>
         {["E2EE Messaging", "Device Binding", "BIP39 Backup", "Two-Factor Auth"].map(s => (
@@ -836,7 +911,7 @@ export default function BchatApp() {
       {tab === "alerts" && <AlertsTab alerts={scamAlerts} onDismiss={handleDismissAlert} />}
       {tab === "support" && <SupportTab />}
       {tab === "trust" && <TrustTab me={ME} profile={trustProfile} />}
-      {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} me={ME} onLogout={handleLogout} />}
+      {tab === "settings" && <SettingsTab onOpenGuide={() => setOverlay("guide")} onOpenSpec={() => setOverlay("spec")} me={ME} onLogout={handleLogout} canInvite={trustProfile?.canInvite ?? false} />}
     </div>
   );
 }
