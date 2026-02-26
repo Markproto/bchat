@@ -6,10 +6,11 @@
 # but certbot needs nginx running to complete the ACME HTTP-01 challenge.
 #
 # What this script does:
-#   1. Creates a dummy self-signed certificate so nginx can start
-#   2. Starts nginx + certbot containers
-#   3. Requests a real Let's Encrypt certificate (overwrites dummy)
-#   4. Reloads nginx to pick up the real certificate
+#   1. Cleans up any stale certificate state
+#   2. Creates a dummy self-signed certificate so nginx can start
+#   3. Starts nginx
+#   4. Requests a real Let's Encrypt certificate (overwrites dummy)
+#   5. Reloads nginx to pick up the real certificate
 #
 # Usage:
 #   cd /home/bchat/bchat
@@ -40,44 +41,60 @@ if [ -z "$EMAIL" ] || [ "$EMAIL" = "your-email@example.com" ]; then
 fi
 
 CERT_NAME="bchat"
-DATA_PATH="certbot-conf"  # Docker volume name
 
 echo "=== bchat SSL Certificate Setup ==="
 echo "Domain: $DOMAIN"
 echo "Email:  $EMAIL"
 echo ""
 
-# Step 1: Create dummy certificate so nginx can start
-echo "[1/5] Creating dummy certificate..."
-docker compose run --rm --entrypoint "\
+# Step 1: Stop nginx and clean up any stale cert state
+echo "[1/5] Cleaning up..."
+docker compose stop nginx 2>/dev/null || true
+docker compose run --rm --entrypoint "sh" certbot -c "\
+  rm -rf /etc/letsencrypt/live/$CERT_NAME && \
+  rm -rf /etc/letsencrypt/archive/$CERT_NAME && \
+  rm -rf /etc/letsencrypt/renewal/$CERT_NAME.conf"
+echo "  Done."
+
+# Step 2: Create dummy certificate so nginx can start
+echo "[2/5] Creating dummy certificate..."
+docker compose run --rm --entrypoint "sh" certbot -c "\
   mkdir -p /etc/letsencrypt/live/$CERT_NAME && \
   openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
     -keyout /etc/letsencrypt/live/$CERT_NAME/privkey.pem \
     -out /etc/letsencrypt/live/$CERT_NAME/fullchain.pem \
-    -subj '/CN=localhost'" certbot
+    -subj '/CN=localhost'"
+# Verify the dummy cert was actually created
+docker compose run --rm --entrypoint "sh" certbot -c "\
+  test -f /etc/letsencrypt/live/$CERT_NAME/fullchain.pem || (echo 'ERROR: dummy cert not created!' && exit 1)"
 echo "  Done."
 
-# Step 2: Start nginx (it can now start with the dummy cert)
-echo "[2/5] Starting nginx..."
+# Step 3: Start nginx (it can now start with the dummy cert)
+echo "[3/5] Starting nginx..."
 docker compose up -d nginx
 echo "  Waiting for nginx to be ready..."
 sleep 5
+# Verify nginx is actually running (not crash-looping)
+if ! docker compose exec nginx nginx -t 2>/dev/null; then
+  echo "ERROR: nginx failed to start. Check: docker compose logs nginx"
+  exit 1
+fi
+echo "  nginx is ready."
 
-# Step 3: Request real certificate from Let's Encrypt
-# (dummy cert stays in place so nginx keeps running; --force-renewal overwrites it)
-echo "[3/5] Requesting Let's Encrypt certificate..."
-docker compose run --rm --entrypoint "\
+# Step 4: Request real certificate from Let's Encrypt
+echo "[4/5] Requesting Let's Encrypt certificate..."
+docker compose run --rm --entrypoint "sh" certbot -c "\
   certbot certonly --webroot -w /var/www/certbot \
     --cert-name $CERT_NAME \
     -d $DOMAIN \
     --email $EMAIL \
     --agree-tos \
     --no-eff-email \
-    --force-renewal" certbot
+    --force-renewal"
 echo "  Done."
 
-# Step 4: Reload nginx to use the real certificate
-echo "[4/5] Reloading nginx..."
+# Step 5: Reload nginx to use the real certificate
+echo "[5/5] Reloading nginx..."
 docker compose exec nginx nginx -s reload
 echo "  Done."
 
