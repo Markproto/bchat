@@ -58,3 +58,26 @@ export function sendMessage(
     body: JSON.stringify(payload),
   });
 }
+
+export interface CoolingStatusResponse {
+  isCooling: boolean;
+  hoursRemaining: number;
+  expiresAt: string | null;
+  restrictedActions?: string[];
+}
+
+/** Check cooling status with a specific contact. */
+export function getCoolingStatus(
+  contactUserId: string,
+): Promise<CoolingStatusResponse> {
+  return api(`/api/messages/cooling/${contactUserId}`);
+}
+
+/** Admin: exempt a contact pair from the cooling period. */
+export function exemptCooling(
+  contactUserId: string,
+): Promise<{ message: string; contactUserId: string }> {
+  return api(`/api/messages/cooling/${contactUserId}/exempt`, {
+    method: 'POST',
+  });
+}

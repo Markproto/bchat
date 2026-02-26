@@ -7,7 +7,8 @@ import { useAuth } from "./context/AuthContext.tsx";
 import { useWebSocket, type WsEvent, type WsNewMessage } from "./hooks/useWebSocket.ts";
 import { encryptMessage, decryptMessage } from "./crypto/e2ee.ts";
 import { initKeyPair, getKeyPair, clearKeyPair, fetchRecipientKey } from "./crypto/keyManager.ts";
-import { sendMessage } from "./api/messages.ts";
+import { sendMessage, getCoolingStatus, exemptCooling } from "./api/messages.ts";
+import { ApiError } from "./api/client.ts";
 import { getMyTrustProfile, type TrustProfile } from "./api/trust.ts";
 import { createTicket as apiCreateTicket, getMyTickets, requestVerification, type SupportTicket } from "./api/support.ts";
 import { getMyAlerts, dismissAlert as apiDismissAlert, type ScamAlert } from "./api/scam.ts";
@@ -219,7 +220,7 @@ function ChatList({ contacts, selected, onSelect }: { contacts: Contact[]; selec
 }
 
 // ===================== CHAT VIEW =====================
-function ChatView({ contact, messages, onSend, meId }: { contact: Contact | undefined; messages: Message[] | undefined; onSend: (text: string) => void; meId: string }) {
+function ChatView({ contact, messages, onSend, meId, cooling, isAdmin, onExemptCooling }: { contact: Contact | undefined; messages: Message[] | undefined; onSend: (text: string) => void; meId: string; cooling?: { hoursRemaining: number; expiresAt: string }; isAdmin?: boolean; onExemptCooling?: () => void }) {
   const [input, setInput] = useState("");
   const [scamWarning, setScamWarning] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -266,10 +267,15 @@ function ChatView({ contact, messages, onSend, meId }: { contact: Contact | unde
         </div>
       </div>
       {/* Cooling banner */}
-      {contact.cooling && (
-        <div style={{ padding: "8px 16px", background: T.warn + "15", borderBottom: `1px solid ${T.warn}33`, display: "flex", alignItems: "center", gap: 8 }}>
-          <ClockIcon size={14} color={T.warn} />
-          <span style={{ fontSize: 11, color: T.warn }}>Cooling period active — {contact.coolHrs}h remaining. Wallet addresses, links, and seed keywords are restricted.</span>
+      {cooling && (
+        <div style={{ padding: "8px 16px", background: T.warn + "15", borderBottom: `1px solid ${T.warn}33`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <ClockIcon size={14} color={T.warn} />
+            <span style={{ fontSize: 11, color: T.warn }}>Cooling period active — {cooling.hoursRemaining}h remaining. Wallet addresses, links, and seed keywords are restricted.</span>
+          </div>
+          {isAdmin && onExemptCooling && (
+            <Btn small variant="warn" onClick={onExemptCooling}>Exempt</Btn>
+          )}
         </div>
       )}
       {/* Scam warning */}
@@ -624,6 +630,7 @@ export default function BchatApp() {
   const [overlay, setOverlay] = useState<"landing" | "login" | "guide" | "spec" | null>("landing");
   const [trustProfile, setTrustProfile] = useState<TrustProfile | null>(null);
   const [scamAlerts, setScamAlerts] = useState<ScamAlert[]>([]);
+  const [coolingInfo, setCoolingInfo] = useState<Record<string, { hoursRemaining: number; expiresAt: string }>>({});
 
   // Build ME from auth state + live trust profile
   const ME: User = user
@@ -694,6 +701,21 @@ export default function BchatApp() {
     }
   }, [user, overlay]);
 
+  // ── Check cooling status when selecting a chat ───────────
+  useEffect(() => {
+    if (selChat && user) {
+      getCoolingStatus(selChat)
+        .then(res => {
+          if (res.isCooling) {
+            setCoolingInfo(prev => ({ ...prev, [selChat]: { hoursRemaining: res.hoursRemaining, expiresAt: res.expiresAt! } }));
+          } else {
+            setCoolingInfo(prev => { const next = { ...prev }; delete next[selChat]; return next; });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [selChat, user]);
+
   const unreadTotal = CONTACTS.reduce((a, c) => a + c.unread, 0);
 
   async function handleSend(text: string) {
@@ -720,9 +742,27 @@ export default function BchatApp() {
           message_type: "text",
           content: text, // plaintext hint for server-side scam detection
         });
-      } catch {
-        // Message still appears locally; mark as failed in a future iteration
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 403 && err.body.error === "cooling_period_restriction") {
+          const cooling = err.body.cooling as { hoursRemaining: number; expiresAt: string };
+          setCoolingInfo(prev => ({ ...prev, [selChat]: cooling }));
+          // Remove the optimistic message since it was blocked
+          setMsgs(prev => ({
+            ...prev,
+            [selChat]: (prev[selChat] || []).filter(m => m.id !== tempId),
+          }));
+        }
       }
+    }
+  }
+
+  async function handleExemptCooling() {
+    if (!selChat) return;
+    try {
+      await exemptCooling(selChat);
+      setCoolingInfo(prev => { const next = { ...prev }; delete next[selChat]; return next; });
+    } catch {
+      // Only admins can exempt — error expected for non-admins
     }
   }
 
@@ -790,7 +830,7 @@ export default function BchatApp() {
       <Sidebar activeTab={tab} setTab={setTab} unreadTotal={unreadTotal} alertCount={scamAlerts.length} />
       {tab === "chats" && <>
         <ChatList contacts={CONTACTS} selected={selChat} onSelect={id => { setSelChat(id); setTab("chats"); }} />
-        <ChatView contact={contact} messages={msgs[selChat || ""]} onSend={handleSend} meId={ME.id} />
+        <ChatView contact={contact} messages={msgs[selChat || ""]} onSend={handleSend} meId={ME.id} cooling={selChat ? coolingInfo[selChat] : undefined} isAdmin={ME.isAdmin || ME.isVerifiedAdmin} onExemptCooling={handleExemptCooling} />
       </>}
       {tab === "contacts" && <ContactsTab contacts={CONTACTS} />}
       {tab === "alerts" && <AlertsTab alerts={scamAlerts} onDismiss={handleDismissAlert} />}

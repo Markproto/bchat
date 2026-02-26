@@ -13,9 +13,10 @@
 import { Router, Response } from "express";
 import {
   authenticate,
+  requireAdmin,
   AuthenticatedRequest,
 } from "../middleware/authenticate";
-import { enforceCooling } from "../middleware/coolingPeriod";
+import { enforceCooling, checkCoolingStatus } from "../middleware/coolingPeriod";
 import { scanMessage } from "../scam/detector";
 import { createRateLimit } from "../middleware/rateLimit";
 import { query } from "../db/pool";
@@ -315,6 +316,89 @@ router.get(
     } catch (err: any) {
       logger.error("Messages", `List conversations error: ${err.message}`);
       res.status(500).json({ error: "Failed to list conversations" });
+    }
+  }
+);
+
+// ===========================================
+// GET /api/messages/cooling/:contactUserId
+// Check cooling status with a specific contact
+// ===========================================
+router.get(
+  "/cooling/:contactUserId",
+  authenticate,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const status = await checkCoolingStatus(
+        req.user!.id,
+        req.params.contactUserId
+      );
+
+      if (!status) {
+        res.json({ isCooling: false, hoursRemaining: 0, expiresAt: null });
+        return;
+      }
+
+      res.json({
+        isCooling: status.isCooling,
+        hoursRemaining: status.hoursRemaining,
+        expiresAt: status.coolingExpiresAt,
+        restrictedActions: status.restrictedActions,
+      });
+    } catch (err: any) {
+      logger.error("Messages", `Cooling status error: ${err.message}`);
+      res.status(500).json({ error: "Failed to check cooling status" });
+    }
+  }
+);
+
+// ===========================================
+// POST /api/messages/cooling/:contactUserId/exempt
+// Admin: Exempt a contact pair from cooling period
+// Lets admins turn off cooling for people they know
+// ===========================================
+router.post(
+  "/cooling/:contactUserId/exempt",
+  authenticate,
+  requireAdmin,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const adminId = req.user!.id;
+      const contactUserId = req.params.contactUserId;
+
+      // Normalize the pair (same as cooling middleware)
+      const [userA, userB] =
+        adminId < contactUserId
+          ? [adminId, contactUserId]
+          : [contactUserId, adminId];
+
+      // Set first_interaction far enough back that cooling has expired
+      const result = await query(
+        `INSERT INTO contact_pairs (user_a, user_b, first_interaction)
+         VALUES ($1, $2, NOW() - INTERVAL '73 hours')
+         ON CONFLICT (user_a, user_b)
+         DO UPDATE SET first_interaction = NOW() - INTERVAL '73 hours'
+         RETURNING *`,
+        [userA, userB]
+      );
+
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: "Failed to exempt contact pair" });
+        return;
+      }
+
+      logger.info(
+        "Cooling",
+        `Admin ${adminId} exempted cooling for pair ${adminId} <-> ${contactUserId}`
+      );
+
+      res.json({
+        message: "Cooling period exempted for this contact",
+        contactUserId,
+      });
+    } catch (err: any) {
+      logger.error("Messages", `Cooling exempt error: ${err.message}`);
+      res.status(500).json({ error: "Failed to exempt cooling period" });
     }
   }
 );
