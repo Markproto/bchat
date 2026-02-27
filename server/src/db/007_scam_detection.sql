@@ -196,7 +196,7 @@ VALUES
     'impersonation',
     'i.?m\s*(from|with)\s*(support|admin|the\s*team|customer\s*service|help\s*desk)|official\s*(support|admin|staff|team)',
     'MEDIUM',
-    'This person claims to be support staff. In bchat, real admins have verified badges and cryptographic proof. Check their profile.',
+    'This person claims to be support staff. In X Shield, real admins have verified badges and cryptographic proof. Check their profile.',
     true
   ),
   -- LOW: Suspicious patterns worth noting

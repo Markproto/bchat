@@ -185,7 +185,7 @@ export function createBot(token: string): Telegraf {
       [ctx.from.id]
     );
     if (bchatUser.rows.length === 0 || !['admin', 'creator'].includes(bchatUser.rows[0].role)) {
-      ctx.reply('Only bchat admins can use /trustroom.');
+      ctx.reply('Only X Shield admins can use /trustroom.');
       return;
     }
     const adminId = bchatUser.rows[0].id;
@@ -294,7 +294,7 @@ export function createBot(token: string): Telegraf {
     if (joinEvent.rows.length > 0) {
       ctx.reply(
         `Your Telegram ID (${userId}) has been recorded.\n` +
-        `Open the bchat app and connect your account to complete verification.`
+        `Open the X Shield app and connect your account to complete verification.`
       );
     } else {
       ctx.reply(

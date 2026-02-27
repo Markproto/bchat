@@ -9,7 +9,7 @@
 
 import { Pool, PoolConfig } from 'pg';
 
-const rawUrl = process.env.DATABASE_URL || 'postgresql://bchat:bchat@localhost:5432/bchat';
+const rawUrl = process.env.DATABASE_URL || 'postgresql://xshield:xshield@localhost:5432/xshield';
 
 // DATABASE_SSL env var overrides auto-detection (needed for Docker where hostname is "db")
 const sslEnv = process.env.DATABASE_SSL;
