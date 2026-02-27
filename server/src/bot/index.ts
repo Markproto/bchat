@@ -89,8 +89,8 @@ export function createBot(token: string): Telegraf {
               try {
                 await ctx.telegram.sendMessage(
                   user.id,
-                  `You have auto-access to bchat via the trusted group "${trustedRoom.name}"!\n\n` +
-                  `Open the bchat app and tap "Connect Telegram" to set up your account.\n` +
+                  `You have auto-access to X Shield via the trusted group "${trustedRoom.name}"!\n\n` +
+                  `Open the X Shield app and tap "Connect Telegram" to set up your account.\n` +
                   `No invite code needed.`
                 );
               } catch {
@@ -133,8 +133,8 @@ export function createBot(token: string): Telegraf {
         );
 
         ctx.reply(
-          `Welcome to bchat! Your invite has been verified.\n\n` +
-          `Open the bchat app and tap "Connect Telegram" to complete setup.\n\n` +
+          `Welcome to X Shield! Your invite has been verified.\n\n` +
+          `Open the X Shield app and tap "Connect Telegram" to complete setup.\n\n` +
           `Your verification code: ${payload}`
         );
         return;
@@ -142,9 +142,9 @@ export function createBot(token: string): Telegraf {
     }
 
     ctx.reply(
-      `Welcome to bchat!\n\n` +
+      `Welcome to X Shield!\n\n` +
       `If you have an invite code, ask the person who invited you for their link.\n` +
-      `If you're already a member, open the bchat app to connect your account.`
+      `If you're already a member, open the X Shield app to connect your account.`
     );
   });
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 // ===================== SIMULATED BACKEND =====================
-// This simulates the full bchat backend in-memory so we can
+// This simulates the full X Shield backend in-memory so we can
 // test every phase without a running server.
 
 interface DBUser {
@@ -173,9 +173,9 @@ const COOL_PATTERNS = {
 
 // ===================== THEME =====================
 const T = {
-  bg:"#0a0a14",card:"#12122a",border:"#1e1e3a",text:"#e0e0ee",
-  muted:"#6b6b8a",accent:"#00d26a",danger:"#ff4757",warn:"#ffa502",
-  input:"#0e0e1e",
+  bg:"#0a0b10",card:"#111827",border:"#1f2937",text:"#e2e8f0",
+  muted:"#6b7b8d",accent:"#94a3b8",danger:"#ff4757",warn:"#ffa502",
+  input:"#0d1117",silver:"#c9d1d9",bright:"#e6edf3",
 };
 
 // ===================== UI COMPONENTS =====================
@@ -317,10 +317,10 @@ function runAllTests(): TestSuiteResults {
 
   // ===================== PHASE 3: INVITES =====================
   test("Phase 3: Invite Code Generation", () => {
-    const code = "BCHAT-"+genHex(4)+"-"+genHex(4);
+    const code = "XSHLD-"+genHex(4)+"-"+genHex(4);
     DB.inviteCodes.push({code,createdBy:DB.users[0]?.id,used:false,usedBy:null});
     return {status:"pass",detail:`Code: ${code}`,subResults:[
-      {label:"Code format valid",pass:/^BCHAT-[A-F0-9]{4}-[A-F0-9]{4}$/.test(code)},
+      {label:"Code format valid",pass:/^XSHLD-[A-F0-9]{4}-[A-F0-9]{4}$/.test(code)},
       {label:"Stored in invite_codes table",pass:DB.inviteCodes.length>0},
       {label:"Linked to creator",pass:DB.inviteCodes[0].createdBy===DB.users[0]?.id},
     ]};
@@ -510,7 +510,7 @@ function runAllTests(): TestSuiteResults {
 
   // ===================== PHASE 8: E2EE =====================
   test("Phase 8: E2EE Encrypt → Relay → Decrypt", () => {
-    const plaintext = "Hello from bchat!";
+    const plaintext = "Hello from X Shield!";
     const ciphertext = simEnc(plaintext);
     const decrypted = simDec(ciphertext);
     return {status:decrypted===plaintext?"pass":"fail",detail:`"${plaintext}" → encrypt → relay → decrypt`,subResults:[
@@ -622,7 +622,7 @@ export default function BchatTestSuite() {
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:22}}>🛡️</span>
             <div>
-              <h1 style={{margin:0,fontSize:20,color:T.text}}>bchat Test Suite</h1>
+              <h1 style={{margin:0,fontSize:20,color:T.text}}>X Shield Test Suite</h1>
               <p style={{margin:0,fontSize:11,color:T.muted}}>All 9 phases — Integration tests</p>
             </div>
           </div>
@@ -660,7 +660,7 @@ export default function BchatTestSuite() {
 
         {/* Footer */}
         <div style={{textAlign:"center",padding:"16px 0",color:T.muted,fontSize:10}}>
-          bchat Test Suite — Phases 1-9 | BIP39/ed25519 | Device Binding | Trust Scoring | Cooling Period | AI Scam Detection | E2EE | Safe Support
+          X Shield Test Suite — Phases 1-9 | BIP39/ed25519 | Device Binding | Trust Scoring | Cooling Period | AI Scam Detection | E2EE | Safe Support
         </div>
       </div>
     </div>

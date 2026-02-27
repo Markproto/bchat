@@ -2,9 +2,9 @@ import { useState } from "react";
 
 // ===================== THEME (matches App.tsx) =====================
 const T = {
-  bg: "#0a0a14", card: "#12122a", border: "#1e1e3a", text: "#e0e0ee",
-  muted: "#6b6b8a", accent: "#00d26a", danger: "#ff4757", warn: "#ffa502",
-  input: "#0e0e1e",
+  bg: "#0a0b10", card: "#111827", border: "#1f2937", text: "#e2e8f0",
+  muted: "#6b7b8d", accent: "#94a3b8", danger: "#ff4757", warn: "#ffa502",
+  input: "#0d1117", silver: "#c9d1d9", bright: "#e6edf3",
 };
 
 // ===================== COMPONENTS =====================
@@ -60,7 +60,7 @@ const CAPABILITIES: Capability[] = [
   {
     name: "Invite-Only Access with Chain Tracking",
     what: "New users can only join via invite codes from existing users. Every invite is permanently linked to the inviter, creating an accountability chain.",
-    teamUse: "You control who joins your organization's bchat network. If a team member invites someone who causes problems, the invite chain makes it traceable.",
+    teamUse: "You control who joins your organization's X Shield network. If a team member invites someone who causes problems, the invite chain makes it traceable.",
     status: "Built",
   },
   {
@@ -175,8 +175,8 @@ export default function TeamSpec({ onBack }: { onBack: () => void }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
           <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 14, fontFamily: "inherit" }}>&larr; Back</button>
           <div style={{ flex: 1 }}>
-            <h1 style={{ margin: 0, fontSize: 18, color: T.text, fontWeight: 700 }}>bchat — Team Capability Sheet</h1>
-            <p style={{ margin: 0, fontSize: 11, color: T.muted }}>How your team uses each layer of bchat's security platform</p>
+            <h1 style={{ margin: 0, fontSize: 18, color: T.text, fontWeight: 700 }}>X Shield — Team Capability Sheet</h1>
+            <p style={{ margin: 0, fontSize: 11, color: T.muted }}>How your team uses each layer of X Shield's security platform</p>
           </div>
           <Badge text="11 CAPABILITIES" color={T.accent} />
         </div>
@@ -210,9 +210,9 @@ export default function TeamSpec({ onBack }: { onBack: () => void }) {
           <>
             {/* Summary banner */}
             <Card style={{ marginBottom: 20, background: T.accent + "08", borderColor: T.accent + "33" }}>
-              <p style={{ fontWeight: 700, fontSize: 14, color: T.text, margin: 0 }}>What is bchat?</p>
+              <p style={{ fontWeight: 700, fontSize: 14, color: T.text, margin: 0 }}>What is X Shield?</p>
               <p style={{ fontSize: 12, color: T.muted, margin: "6px 0 0", lineHeight: 1.7 }}>
-                bchat is a messaging platform built from the ground up to eliminate social engineering, impersonation, and financial fraud.
+                X Shield is a messaging platform built from the ground up to eliminate social engineering, impersonation, and financial fraud.
                 Every feature below is production-ready and integrated into a single application your team can deploy today.
                 There are no add-ons, no premium tiers, and no features behind flags — everything ships together because security only works when it's comprehensive.
               </p>
@@ -270,7 +270,7 @@ export default function TeamSpec({ onBack }: { onBack: () => void }) {
             <Card style={{ marginBottom: 20, background: T.accent + "08", borderColor: T.accent + "33" }}>
               <p style={{ fontWeight: 700, fontSize: 14, color: T.text, margin: 0 }}>Team Deployment Scenarios</p>
               <p style={{ fontSize: 12, color: T.muted, margin: "6px 0 0", lineHeight: 1.7 }}>
-                bchat is designed for organizations where trust and security are non-negotiable.
+                X Shield is designed for organizations where trust and security are non-negotiable.
                 Below are practical breakdowns of how each team function benefits from the platform's integrated security layers.
               </p>
             </Card>
@@ -305,7 +305,7 @@ export default function TeamSpec({ onBack }: { onBack: () => void }) {
             <Card style={{ marginBottom: 20, background: T.accent + "08", borderColor: T.accent + "33" }}>
               <p style={{ fontWeight: 700, fontSize: 14, color: T.text, margin: 0 }}>Technical Architecture</p>
               <p style={{ fontSize: 12, color: T.muted, margin: "6px 0 0", lineHeight: 1.7 }}>
-                bchat is a full-stack TypeScript application. The client handles all cryptographic operations — the server is a blind relay that never sees plaintext.
+                X Shield is a full-stack TypeScript application. The client handles all cryptographic operations — the server is a blind relay that never sees plaintext.
                 All components are open for audit.
               </p>
             </Card>
@@ -356,7 +356,7 @@ export default function TeamSpec({ onBack }: { onBack: () => void }) {
 
             {/* What we don't do */}
             <Card style={{ background: T.danger + "08", borderColor: T.danger + "33" }}>
-              <p style={{ fontWeight: 700, fontSize: 14, color: T.text, margin: "0 0 10px" }}>What bchat Does Not Do</p>
+              <p style={{ fontWeight: 700, fontSize: 14, color: T.text, margin: "0 0 10px" }}>What X Shield Does Not Do</p>
               <p style={{ fontSize: 12, color: T.muted, margin: "0 0 10px", lineHeight: 1.7 }}>
                 Transparency about limitations is part of security:
               </p>
@@ -380,7 +380,7 @@ export default function TeamSpec({ onBack }: { onBack: () => void }) {
 
         {/* Footer */}
         <div style={{ textAlign: "center", padding: "24px 0 8px", color: T.muted, fontSize: 10 }}>
-          bchat Team Capability Sheet — 11 Integrated Security Layers | Zero Plaintext Architecture | Full Audit Trail
+          X Shield Team Capability Sheet — 11 Integrated Security Layers | Zero Plaintext Architecture | Full Audit Trail
         </div>
       </div>
     </div>

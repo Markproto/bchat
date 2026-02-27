@@ -13,7 +13,7 @@
 #   5. Reloads nginx to pick up the real certificate
 #
 # Usage:
-#   cd /home/bchat/bchat
+#   cd /home/xshield/xshield
 #   sudo bash deploy/init-letsencrypt.sh
 #
 # Prerequisites:
@@ -40,9 +40,9 @@ if [ -z "$EMAIL" ] || [ "$EMAIL" = "your-email@example.com" ]; then
   exit 1
 fi
 
-CERT_NAME="bchat"
+CERT_NAME="xshield"
 
-echo "=== bchat SSL Certificate Setup ==="
+echo "=== X Shield SSL Certificate Setup ==="
 echo "Domain: $DOMAIN"
 echo "Email:  $EMAIL"
 echo ""

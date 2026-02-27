@@ -1,8 +1,8 @@
 # Shield X — Developer Handoff Sheet
 
-> **Formerly:** bchat
+> **Formerly:** bchat (rebranded to X Shield)
 > **Date:** February 27, 2026
-> **Repo:** `Markproto/bchat` (rename pending)
+> **Repo:** `Markproto/bchat`
 
 ---
 
@@ -253,7 +253,7 @@ Trusted room users get 0.5x dampening on cascade penalties.
 # Prerequisites: Node.js >= 20, PostgreSQL 15, Redis (optional)
 
 # Clone & install
-git clone <repo-url> && cd bchat
+git clone <repo-url> && cd xshield
 cd server && npm install
 cd ../client && npm install
 
@@ -295,12 +295,12 @@ cd client && npm run dev   # Vite dev server (proxies to :8080)
 ```bash
 # 1. Bootstrap server (as root)
 sudo bash deploy/setup-droplet.sh
-# Creates 'bchat' user, installs Docker, configures UFW (22/80/443)
+# Creates 'xshield' user, installs Docker, configures UFW (22/80/443)
 
 # 2. Switch to deploy user and clone
-su - bchat
-git clone <repo-url> /home/bchat/bchat
-cd /home/bchat/bchat
+su - xshield
+git clone <repo-url> /home/xshield/xshield
+cd /home/xshield/xshield
 
 # 3. Configure environment
 cp .env.production.example .env
@@ -373,7 +373,7 @@ curl https://your-domain.com/health
 
 - **Test coverage** — Jest is configured but no test files exist yet in `src/`. Writing tests should be a priority.
 - **Redis** — Referenced in rate-limit dependencies (`ioredis`, `rate-limit-redis`) but no Redis service in `docker-compose.yml`. Currently falls back to in-memory rate limiting. Add a Redis service for production.
-- **Rename to Shield X** — Package names, Docker references, deploy scripts, nginx config, and database name all still reference `bchat`. A coordinated rename is needed across: `package.json`, `docker-compose.yml`, `setup-droplet.sh`, `init-letsencrypt.sh`, `docker-entrypoint.sh`, nginx config, and database (`POSTGRES_DB`).
+- **Rebrand complete** — All UI text, package names, Docker references, deploy scripts, nginx config, and database names have been updated from `bchat` to `X Shield` / `xshield`.
 - **Cron jobs** — `npm run cron` exists but no `src/cron/` directory was found. Scheduled job infrastructure may need implementation.
 - **Client E2EE** — `tweetnacl` is in client dependencies for client-side encryption. Verify the React app properly implements the key management and encryption flows.
 
@@ -393,4 +393,4 @@ If you're a new developer, read these files first:
 
 ---
 
-*This document was generated from the codebase as of commit `cb0f42a`. The project is being renamed from bchat to Shield X — update all internal references accordingly.*
+*This document was generated from the codebase as of commit `cb0f42a`. The project has been rebranded from bchat to X Shield.*

@@ -1,8 +1,8 @@
 {
-  "name": "bchat-client",
+  "name": "xshield-client",
   "version": "0.1.0",
   "private": true,
-  "description": "bchat client-side crypto and UI",
+  "description": "X Shield client-side crypto and UI",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

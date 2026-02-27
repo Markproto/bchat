@@ -5,7 +5,7 @@
  *   1. Telegram Login Widget (production) — auto-populates telegram user data
  *   2. Manual Telegram ID entry (dev/demo) — for local testing without a live bot
  *
- * The user must have joined the bchat Telegram channel first (via bot invite link).
+ * The user must have joined the X Shield Telegram channel first (via bot invite link).
  * The server verifies this via the telegram_join_events table.
  */
 
@@ -15,9 +15,9 @@ import type { TelegramUser } from './api/auth';
 
 // ── Theme (matches App.tsx) ─────────────────────────────────
 const T = {
-  bg: '#0a0a14', card: '#12122a', border: '#1e1e3a', text: '#e0e0ee',
-  muted: '#6b6b8a', accent: '#00d26a', danger: '#ff4757', warn: '#ffa502',
-  input: '#0e0e1e',
+  bg: '#0a0b10', card: '#111827', border: '#1f2937', text: '#e2e8f0',
+  muted: '#6b7b8d', accent: '#94a3b8', danger: '#ff4757', warn: '#ffa502',
+  input: '#0d1117', silver: '#c9d1d9', bright: '#e6edf3',
 };
 
 // ── Telegram Login Widget callback type ─────────────────────
@@ -135,7 +135,7 @@ export default function LoginScreen({ onBack }: { onBack?: () => void }) {
             </svg>
           </div>
           <h1 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 6px' }}>
-            b<span style={{ color: T.accent }}>chat</span>
+            X<span style={{ color: T.silver }}> Shield</span>
           </h1>
           <p style={{ fontSize: 13, color: T.muted, margin: 0 }}>
             Connect your Telegram account to get started
@@ -344,7 +344,7 @@ export default function LoginScreen({ onBack }: { onBack?: () => void }) {
             Before you can log in:
           </p>
           <ol style={{ fontSize: 11, color: T.muted, lineHeight: 1.7, margin: 0, paddingLeft: 18 }}>
-            <li>Get an invite link from an existing bchat member</li>
+            <li>Get an invite link from an existing X Shield member</li>
             <li>Open the link in Telegram to join the channel</li>
             <li>Come back here and connect your Telegram account</li>
           </ol>

@@ -44,9 +44,9 @@ const ClockIcon = (p: Partial<IconProps>) => <Icon {...p} d={<><circle cx="12" c
 
 // ===================== THEME =====================
 const T = {
-  bg: "#0a0a14", card: "#12122a", border: "#1e1e3a", text: "#e0e0ee",
-  muted: "#6b6b8a", accent: "#00d26a", danger: "#ff4757", warn: "#ffa502",
-  input: "#0e0e1e",
+  bg: "#0a0b10", card: "#111827", border: "#1f2937", text: "#e2e8f0",
+  muted: "#6b7b8d", accent: "#94a3b8", danger: "#ff4757", warn: "#ffa502",
+  input: "#0d1117", silver: "#c9d1d9", bright: "#e6edf3",
 };
 
 // ===================== HELPERS =====================
@@ -681,7 +681,7 @@ function SettingsTab({ onOpenGuide, onOpenSpec, onOpenTutorial, me, onLogout, ca
               <span style={{ fontSize: 16 }}>📋</span>
               <div style={{ textAlign: "left" }}>
                 <p style={{ fontWeight: 600, fontSize: 13, color: T.text, margin: 0 }}>Team Capability Sheet</p>
-                <p style={{ fontSize: 10, color: T.muted, margin: "2px 0 0" }}>How your team can use bchat — share with stakeholders</p>
+                <p style={{ fontSize: 10, color: T.muted, margin: "2px 0 0" }}>How your team can use X Shield — share with stakeholders</p>
               </div>
             </div>
             <span style={{ color: T.muted, fontSize: 14 }}>&rarr;</span>
@@ -699,7 +699,7 @@ function SettingsTab({ onOpenGuide, onOpenSpec, onOpenTutorial, me, onLogout, ca
         </div>
       </Card>
       <Card>
-        <p style={{ fontWeight: 600, fontSize: 13, color: T.text, marginBottom: 8 }}>About bchat</p>
+        <p style={{ fontWeight: 600, fontSize: 13, color: T.text, marginBottom: 8 }}>About X Shield</p>
         <p style={{ fontSize: 11, color: T.muted }}>Version 1.0.0 — Fraud-Elimination Messaging Platform</p>
         <p style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>BIP39/ed25519 identity | Hardware device binding | Invite chain accountability | AI scam detection | Contact cooling periods | Blind E2EE relay</p>
       </Card>
@@ -708,7 +708,7 @@ function SettingsTab({ onOpenGuide, onOpenSpec, onOpenTutorial, me, onLogout, ca
 }
 
 // ===================== MAIN APP =====================
-export default function BchatApp() {
+export default function XShieldApp() {
   const { user, loading, logout } = useAuth();
   const [tab, setTab] = useState("chats");
   const [selChat, setSelChat] = useState<string | null>(null);

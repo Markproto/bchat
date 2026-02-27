@@ -1,5 +1,5 @@
 /**
- * bchat — Secure Messaging Server
+ * X Shield — Secure Messaging Server
  *
  * Entry point that wires together:
  *   - Express API (auth, invites, admin)
@@ -82,7 +82,7 @@ async function main() {
     console.log('[Bot] TELEGRAM_BOT_TOKEN not set — bot disabled');
   }
 
-  console.log('[Init] bchat server fully initialized');
+  console.log('[Init] X Shield server fully initialized');
 }
 
 main().catch((err) => {

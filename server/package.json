@@ -1,7 +1,7 @@
 {
-  "name": "bchat",
+  "name": "xshield",
   "version": "1.0.0",
-  "description": "Fraud-Elimination Messaging Platform — BIP39/ed25519 identity, device binding, invite chain accountability, AI scam detection, E2EE blind relay",
+  "description": "X Shield — Fraud-Elimination Messaging Platform — BIP39/ed25519 identity, device binding, invite chain accountability, AI scam detection, E2EE blind relay",
   "private": true,
   "main": "dist/app.js",
   "scripts": {

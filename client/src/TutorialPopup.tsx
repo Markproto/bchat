@@ -2,9 +2,9 @@ import { useState } from "react";
 
 // ===================== THEME (matches App.tsx) =====================
 const T = {
-  bg: "#0a0a14", card: "#12122a", border: "#1e1e3a", text: "#e0e0ee",
-  muted: "#6b6b8a", accent: "#00d26a", danger: "#ff4757", warn: "#ffa502",
-  input: "#0e0e1e",
+  bg: "#0a0b10", card: "#111827", border: "#1f2937", text: "#e2e8f0",
+  muted: "#6b7b8d", accent: "#94a3b8", danger: "#ff4757", warn: "#ffa502",
+  input: "#0d1117", silver: "#c9d1d9", bright: "#e6edf3",
 };
 
 // ===================== SLIDE DATA =====================
@@ -23,7 +23,7 @@ const SLIDES: Slide[] = [
   {
     id: "welcome",
     icon: "\u{1F6E1}",
-    title: "Welcome to bchat",
+    title: "Welcome to X Shield",
     subtitle: "Fraud-elimination messaging for crypto communities. This walkthrough covers setup through daily operation.",
     bullets: [
       { label: "End-to-end encrypted", detail: "NaCl box encryption — the server never sees your messages" },
@@ -39,7 +39,7 @@ const SLIDES: Slide[] = [
     id: "telegram-setup",
     icon: "\u{1F916}",
     title: "Step 1 \u2014 Telegram Bot Setup",
-    subtitle: "bchat uses Telegram as the entry gate. Users must join your Telegram channel before they can create a bchat account.",
+    subtitle: "X Shield uses Telegram as the entry gate. Users must join your Telegram channel before they can create a X Shield account.",
     bullets: [
       { label: "Create the bot", detail: "Open Telegram, message @BotFather, send /newbot, pick a name and username" },
       { label: "Get the token", detail: "BotFather gives you a token like 123456789:ABCdef... \u2014 save this" },
@@ -51,7 +51,7 @@ const SLIDES: Slide[] = [
       "\u2193",
       "Bot records join event in database",
       "\u2193",
-      "User opens bchat web app",
+      "User opens X Shield web app",
       "\u2193",
       "Server verifies Telegram join record",
       "\u2193",
@@ -89,7 +89,7 @@ const SLIDES: Slide[] = [
     id: "inviting",
     icon: "\u{1F4E8}",
     title: "Step 3 \u2014 Inviting Users",
-    subtitle: "bchat is invite-only. Every user is permanently linked to whoever invited them, creating accountability chains.",
+    subtitle: "X Shield is invite-only. Every user is permanently linked to whoever invited them, creating accountability chains.",
     bullets: [
       { label: "Generate codes", detail: "Settings > Invite Codes > Generate. 8-char code, single-use, expires in 24h." },
       { label: "Accountability", detail: "If your invitee gets banned, YOUR trust score drops 15%. Their inviter drops 8%." },
@@ -243,14 +243,14 @@ const SLIDES: Slide[] = [
     id: "support",
     icon: "\u{1F3AB}",
     title: "Step 9 \u2014 Support Tickets",
-    subtitle: "All support happens inside bchat \u2014 never via Telegram DMs. This prevents the 'fake admin DMs you' scam.",
+    subtitle: "All support happens inside X Shield \u2014 never via Telegram DMs. This prevents the 'fake admin DMs you' scam.",
     bullets: [
       { label: "Create a ticket", detail: "Support tab > New Ticket > fill subject, category, priority" },
       { label: "Lifecycle", detail: "OPEN \u2192 ASSIGNED \u2192 VERIFIED \u2192 RESOLVED \u2192 CLOSED" },
       { label: "Verify Admin", detail: "Click 'Verify Admin' to trigger an ed25519 challenge-response. Server walks the chain to Creator." },
       { label: "Green badge", detail: "Verified admins show 'Cryptographically Verified' with timestamp. Scammers cannot fake this." },
     ],
-    tip: "If someone on Telegram claims to be support and DMs you \u2014 it's a scam. Real support only happens through bchat tickets.",
+    tip: "If someone on Telegram claims to be support and DMs you \u2014 it's a scam. Real support only happens through X Shield tickets.",
   },
 
   // ── 11. Admin Day-to-Day ───────────────────────────────────
@@ -278,7 +278,7 @@ const SLIDES: Slide[] = [
       { label: "Wallet screening", detail: "Cross-reference shared addresses against known scam databases (ChainAbuse, ScamSniffer)" },
       { label: "On-chain correlation", detail: "Flag users whose wallet behavior matches scam patterns (dust attacks, drain contracts)" },
       { label: "Smart contract alerts", detail: "Detect unlimited token approvals, unverified contracts, and honeypot tokens" },
-      { label: "API-first integration", detail: "Trading bots, DAOs, and browser extensions can query bchat's trust and scam data" },
+      { label: "API-first integration", detail: "Trading bots, DAOs, and browser extensions can query X Shield's trust and scam data" },
     ],
     tip: "The pattern engine already supports any regex \u2014 add wallet address patterns, contract addresses, and phishing domains right now.",
   },

@@ -2,9 +2,9 @@ import { useState } from "react";
 
 // ===================== THEME (matches App.tsx) =====================
 const T = {
-  bg: "#0a0a14", card: "#12122a", border: "#1e1e3a", text: "#e0e0ee",
-  muted: "#6b6b8a", accent: "#00d26a", danger: "#ff4757", warn: "#ffa502",
-  input: "#0e0e1e",
+  bg: "#0a0b10", card: "#111827", border: "#1f2937", text: "#e2e8f0",
+  muted: "#6b7b8d", accent: "#94a3b8", danger: "#ff4757", warn: "#ffa502",
+  input: "#0d1117", silver: "#c9d1d9", bright: "#e6edf3",
 };
 
 // ===================== COMPONENTS =====================
@@ -116,7 +116,7 @@ const SECTIONS: Section[] = [
     description: "Understanding how your messages stay private.",
     steps: [
       {
-        title: "How E2EE Works in bchat",
+        title: "How E2EE Works in X Shield",
         content: "Every message is encrypted using NaCl box (curve25519-xsalsa20-poly1305) before leaving your device. The server only ever sees ciphertext, a nonce, and your public key. It cannot read your messages, even under a court order or data breach.",
         tips: ["The 'E2EE' badge in every chat header confirms encryption is active.", "The lock icon at the top of each conversation is your visual confirmation."],
       },
@@ -139,7 +139,7 @@ const SECTIONS: Section[] = [
       {
         title: "Creating a Support Ticket",
         content: "Go to the Support tab and click 'New Ticket'. Choose a category (account, security, billing, technical, report_user, general), describe your issue, and set a priority. An admin will be assigned automatically based on workload.",
-        tips: ["Support only happens inside bchat. If anyone contacts you via DM claiming to be support, they are a scammer.", "Never share credentials in a support ticket — admins never need them."],
+        tips: ["Support only happens inside X Shield. If anyone contacts you via DM claiming to be support, they are a scammer.", "Never share credentials in a support ticket — admins never need them."],
       },
       {
         title: "Verifying Admin Identity",
@@ -181,7 +181,7 @@ const SECTIONS: Section[] = [
     steps: [
       {
         title: "Generating Invite Codes",
-        content: "If your trust score is 0.80 or above, you can generate invite codes from the Settings tab. Each code is formatted BCHAT-XXXX-XXXX and can only be used once. The code permanently links the new user to you in the invite chain.",
+        content: "If your trust score is 0.80 or above, you can generate invite codes from the Settings tab. Each code is formatted XSHLD-XXXX-XXXX and can only be used once. The code permanently links the new user to you in the invite chain.",
         tips: ["Only invite people you know in real life or have verified through trusted channels.", "If your invitee gets banned, YOUR trust score takes a 15% hit."],
       },
       {
@@ -204,7 +204,7 @@ const SECTIONS: Section[] = [
     steps: [
       {
         title: "Designating a Trusted Room",
-        content: "Admins can designate a Telegram group as a trusted source via the /trustroom enable YYYY-MM-DD bot command or the POST /api/trusted-rooms API. The date is the membership cutoff: only users who joined the Telegram group BEFORE that date get auto-access to bchat. Anyone joining after must get a regular invite code.",
+        content: "Admins can designate a Telegram group as a trusted source via the /trustroom enable YYYY-MM-DD bot command or the POST /api/trusted-rooms API. The date is the membership cutoff: only users who joined the Telegram group BEFORE that date get auto-access to X Shield. Anyone joining after must get a regular invite code.",
         tips: ["Use /trustroom enable 2026-02-25 directly in the Telegram group.", "The cutoff date is required and cannot be omitted."],
       },
       {
@@ -242,7 +242,7 @@ export default function AdminGuide({ onBack }: { onBack: () => void }) {
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 14, fontFamily: "inherit" }}>&larr; Back</button>
         <div style={{ flex: 1 }}>
           <h1 style={{ margin: 0, fontSize: 18, color: T.text, fontWeight: 700 }}>Admin User Guide</h1>
-          <p style={{ margin: 0, fontSize: 11, color: T.muted }}>Step-by-step walkthrough of every bchat feature</p>
+          <p style={{ margin: 0, fontSize: 11, color: T.muted }}>Step-by-step walkthrough of every X Shield feature</p>
         </div>
         <Badge text="v1.0" color={T.accent} />
       </div>
@@ -253,9 +253,9 @@ export default function AdminGuide({ onBack }: { onBack: () => void }) {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
             <span style={{ fontSize: 24 }}>🛡️</span>
             <div>
-              <p style={{ fontWeight: 700, fontSize: 14, color: T.text, margin: 0 }}>Welcome to bchat</p>
+              <p style={{ fontWeight: 700, fontSize: 14, color: T.text, margin: 0 }}>Welcome to X Shield</p>
               <p style={{ fontSize: 12, color: T.muted, margin: "4px 0 0" }}>
-                bchat eliminates fraud through 9 integrated security layers: device binding, cryptographic identity, invite chain accountability, anti-impersonation, trust scoring, contact cooling periods, AI scam detection, end-to-end encryption, and verified in-app support. This guide walks you through each one.
+                X Shield eliminates fraud through 9 integrated security layers: device binding, cryptographic identity, invite chain accountability, anti-impersonation, trust scoring, contact cooling periods, AI scam detection, end-to-end encryption, and verified in-app support. This guide walks you through each one.
               </p>
             </div>
           </div>
@@ -351,7 +351,7 @@ export default function AdminGuide({ onBack }: { onBack: () => void }) {
 
         {/* Footer */}
         <div style={{ textAlign: "center", padding: "24px 0 8px", color: T.muted, fontSize: 10 }}>
-          bchat Admin Guide v1.0 — 9 Security Layers | Zero Trust Architecture | Full Audit Trail
+          X Shield Admin Guide v1.0 — 9 Security Layers | Zero Trust Architecture | Full Audit Trail
         </div>
       </div>
     </div>

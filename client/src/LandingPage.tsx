@@ -2,9 +2,9 @@ import { useState } from "react";
 
 // ===================== THEME (matches App.tsx) =====================
 const T = {
-  bg: "#0a0a14", card: "#12122a", border: "#1e1e3a", text: "#e0e0ee",
-  muted: "#6b6b8a", accent: "#00d26a", danger: "#ff4757", warn: "#ffa502",
-  input: "#0e0e1e",
+  bg: "#0a0b10", card: "#111827", border: "#1f2937", text: "#e2e8f0",
+  muted: "#6b7b8d", accent: "#94a3b8", danger: "#ff4757", warn: "#ffa502",
+  input: "#0d1117", silver: "#c9d1d9", bright: "#e6edf3",
 };
 
 function Badge({ text, color }: { text: string; color: string }) {
@@ -45,8 +45,8 @@ export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpen
           </svg>
         </div>
 
-        <h1 style={{ fontSize: 42, fontWeight: 800, color: T.text, margin: "0 0 12px", letterSpacing: -1 }}>
-          b<span style={{ color: T.accent }}>chat</span>
+        <h1 style={{ fontSize: 42, fontWeight: 800, color: T.bright, margin: "0 0 12px", letterSpacing: -1 }}>
+          X<span style={{ color: T.silver }}> Shield</span>
         </h1>
         <p style={{ fontSize: 18, color: T.muted, margin: "0 0 8px", lineHeight: 1.5, maxWidth: 560, marginLeft: "auto", marginRight: "auto" }}>
           Fraud-elimination messaging built on 9 integrated security layers.
@@ -64,7 +64,7 @@ export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpen
               cursor: "pointer", fontWeight: 700, fontSize: 15, fontFamily: "inherit", transition: "all .15s",
             }}
           >
-            Open bchat App
+            Open X Shield
           </button>
           <button
             onClick={onOpenGuide}
@@ -117,7 +117,7 @@ export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpen
               </div>
             </div>
             <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.6, margin: "0 0 14px" }}>
-              Step-by-step walkthrough of every bchat feature. Covers device binding, fingerprints, trust scores,
+              Step-by-step walkthrough of every X Shield feature. Covers device binding, fingerprints, trust scores,
               cooling periods, scam detection, E2EE, support tickets, and the invite system.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -158,7 +158,7 @@ export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpen
               </div>
             </div>
             <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.6, margin: "0 0 14px" }}>
-              Practical breakdown of how your team uses bchat's 11 security capabilities.
+              Practical breakdown of how your team uses X Shield's 11 security capabilities.
               Organized by role: Executive, Finance, Engineering, and Community. No jargon — just what it does and how your team benefits.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -190,12 +190,12 @@ export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpen
                 </svg>
               </div>
               <div>
-                <p style={{ fontWeight: 700, fontSize: 16, color: T.text, margin: 0 }}>Launch bchat App</p>
+                <p style={{ fontWeight: 700, fontSize: 16, color: T.text, margin: 0 }}>Launch X Shield</p>
                 <Badge text="LIVE DEMO" color={T.warn} />
               </div>
             </div>
             <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.6, margin: "0 0 14px" }}>
-              Open the full bchat messaging interface with E2EE chats, trust scoring, scam alerts,
+              Open the full X Shield messaging interface with E2EE chats, trust scoring, scam alerts,
               support tickets, and all 9 security layers active. Explore every feature hands-on.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -237,7 +237,7 @@ export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpen
 
       {/* ─── FOOTER ─── */}
       <div style={{ textAlign: "center", padding: "20px 24px 32px", borderTop: `1px solid ${T.border}` }}>
-        <p style={{ fontSize: 11, color: T.muted }}>bchat v1.0.0 &middot; Zero Plaintext Architecture &middot; Full Audit Trail</p>
+        <p style={{ fontSize: 11, color: T.muted }}>X Shield v1.0.0 &middot; Zero Plaintext Architecture &middot; Full Audit Trail</p>
       </div>
     </div>
   );

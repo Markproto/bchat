@@ -1,11 +1,11 @@
-# bchat
+# X Shield
 
-Secure messaging app with Telegram-based onboarding, BIP38/39 key management, and end-to-end encrypted messaging.
+Fraud-elimination messaging platform with Telegram-based onboarding, BIP38/39 key management, and end-to-end encrypted messaging.
 
 ## Project Structure
 
 ```
-bchat/
+xshield/
 ├── server/
 │   ├── src/
 │   │   ├── admin/          # Admin tools, identity guard, invite accountability
@@ -40,9 +40,9 @@ sudo -u postgres psql
 ```
 
 ```sql
-CREATE USER bchat_user WITH PASSWORD 'your_strong_password_here';
-CREATE DATABASE bchat OWNER bchat_user;
-GRANT ALL PRIVILEGES ON DATABASE bchat TO bchat_user;
+CREATE USER xshield_user WITH PASSWORD 'your_strong_password_here';
+CREATE DATABASE xshield OWNER xshield_user;
+GRANT ALL PRIVILEGES ON DATABASE xshield TO xshield_user;
 \q
 ```
 

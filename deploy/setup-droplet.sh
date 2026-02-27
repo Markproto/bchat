@@ -10,7 +10,7 @@
 #   5. Clones the repo and prepares the environment
 #
 # Usage (as root on a fresh Droplet):
-#   curl -fsSL https://raw.githubusercontent.com/<your-org>/bchat/main/deploy/setup-droplet.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/<your-org>/xshield/main/deploy/setup-droplet.sh | bash
 #
 #   Or copy the script to the server and run:
 #   chmod +x setup-droplet.sh && sudo ./setup-droplet.sh
@@ -19,11 +19,11 @@
 # =============================================================================
 set -e
 
-DEPLOY_USER="bchat"
-REPO_DIR="/home/$DEPLOY_USER/bchat"
+DEPLOY_USER="xshield"
+REPO_DIR="/home/$DEPLOY_USER/xshield"
 
 echo "=========================================="
-echo "  bchat Droplet Setup"
+echo "  X Shield Droplet Setup"
 echo "=========================================="
 echo ""
 
@@ -84,7 +84,7 @@ echo "[5/5] Preparing deployment directory..."
 if [ ! -d "$REPO_DIR" ]; then
   mkdir -p "$REPO_DIR"
   echo "  Created $REPO_DIR"
-  echo "  You'll need to clone or copy the bchat code here."
+  echo "  You'll need to clone or copy the X Shield code here."
 else
   echo "  $REPO_DIR already exists."
 fi
@@ -97,7 +97,7 @@ echo "=========================================="
 echo ""
 echo "Next steps:"
 echo ""
-echo "  1. Clone the repo (as the bchat user):"
+echo "  1. Clone the repo (as the xshield user):"
 echo "     su - $DEPLOY_USER"
 echo "     git clone <your-repo-url> $REPO_DIR"
 echo "     cd $REPO_DIR"
