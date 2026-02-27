@@ -1,0 +1,63 @@
+services:
+  # ---- PostgreSQL 15 ----
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: xshield
+      POSTGRES_USER: xshield
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xshield -d xshield"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---- Express API + Telegram Bot ----
+  server:
+    build:
+      context: ./server
+    environment:
+      DATABASE_URL: postgresql://xshield:${DB_PASSWORD}@db:5432/xshield
+      DATABASE_SSL: "false"
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      PORT: "8080"
+      NODE_ENV: production
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHANNEL_ID: ${TELEGRAM_CHANNEL_ID:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---- Nginx: serves client + proxies API ----
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  # ---- Certbot: auto-renews SSL certificates ----
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"
+
+volumes:
+  pgdata:
+  certbot-conf:
+  certbot-www:
