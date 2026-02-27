@@ -40,7 +40,7 @@ if [ -z "$EMAIL" ] || [ "$EMAIL" = "your-email@example.com" ]; then
   exit 1
 fi
 
-CERT_NAME="xshield"
+CERT_NAME="bchat"
 
 echo "=== X Shield SSL Certificate Setup ==="
 echo "Domain: $DOMAIN"
