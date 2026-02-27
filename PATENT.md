@@ -8,7 +8,7 @@ Secure Messaging Platform with Cryptographic Identity Verification, Trust Scorin
 
 ## Abstract
 
-A secure messaging system ("bchat") that combines Telegram-gated onboarding, ed25519 cryptographic identity, device fingerprinting, invite-chain accountability, trusted room auto-access, a multi-factor trust scoring engine, community flagging, regex-based scam detection with auto-restriction, NaCl box authenticated end-to-end encryption, contact cooling periods, homoglyph-based impersonation detection, and a support ticket system with cryptographic admin verification. The system is designed to prevent the most common cryptocurrency community scams — fake admin impersonation, seed phrase theft, phishing, and social engineering — through layered technical controls that do not rely on user vigilance alone.
+A secure messaging system ("X Shield") that combines Telegram-gated onboarding, ed25519 cryptographic identity, device fingerprinting, invite-chain accountability, trusted room auto-access, a multi-factor trust scoring engine, community flagging, regex-based scam detection with auto-restriction, NaCl box authenticated end-to-end encryption, contact cooling periods, homoglyph-based impersonation detection, and a support ticket system with cryptographic admin verification. The system is designed to prevent the most common cryptocurrency community scams — fake admin impersonation, seed phrase theft, phishing, and social engineering — through layered technical controls that do not rely on user vigilance alone.
 
 ---
 
@@ -38,7 +38,7 @@ The present invention provides a secure messaging platform comprising the follow
 
 (c) **Invite Chain Accountability**: Every non-trusted-room user enters the system through a single-use invite code traceable to a specific inviter. When a user is banned, cascade penalties propagate up the invite chain (Level 1: -0.15, Level 2: -0.08, Level 3: -0.04), creating inviter accountability.
 
-(d) **Trusted Room Auto-Access**: Administrators can designate Telegram groups or bchat conversations as "trusted rooms" with a membership cutoff date. Members who joined before the cutoff receive automatic access with a default trust score of 0.40 (versus 0.50 for invite-code users), without needing a personal invite code. Rooms auto-deactivate after 3 admitted members are banned.
+(d) **Trusted Room Auto-Access**: Administrators can designate Telegram groups or X Shield conversations as "trusted rooms" with a membership cutoff date. Members who joined before the cutoff receive automatic access with a default trust score of 0.40 (versus 0.50 for invite-code users), without needing a personal invite code. Rooms auto-deactivate after 3 admitted members are banned.
 
 (e) **Trust Scoring Engine**: A four-factor formula computes each user's trust score: base (0.5) + account age (max +0.20 at 180 days) + message activity (max +0.20 at 100 messages in 30 days) + invite quality (range -0.20 to +0.20) - community flag penalty (max -0.30). Scores range from 0.00 to 1.00.
 
@@ -60,7 +60,7 @@ The present invention provides a secure messaging platform comprising the follow
 
 ## Brief Description of the Figures
 
-**FIG. 1** illustrates the overall system architecture of the bchat platform.
+**FIG. 1** illustrates the overall system architecture of the X Shield platform.
 
 **FIG. 2** illustrates the identity generation and onboarding flow.
 
@@ -84,7 +84,7 @@ The present invention provides a secure messaging platform comprising the follow
 
 ### Section I: System Architecture Overview
 
-Referring now to FIG. 1, the bchat system comprises a single Node.js server process running on a configurable port (default 8080). The server integrates the following components on a single HTTP server instance:
+Referring now to FIG. 1, the X Shield system comprises a single Node.js server process running on a configurable port (default 8080). The server integrates the following components on a single HTTP server instance:
 
 1. **Express API Server** — Handles all REST API routes with endpoint-specific rate limiting:
    - `/api/auth` — Authentication (10 requests per 15 minutes)
@@ -114,7 +114,7 @@ Referring now to FIG. 2, the onboarding process proceeds as follows:
 
 1. **Telegram Join Detection**: When a user joins the monitored Telegram channel or group, the bot's `chat_member` handler records the event in the `telegram_join_events` table, storing the user's Telegram ID, username, first name, and join timestamp.
 
-2. **Web Application Authentication**: The user opens the bchat web application and initiates the `POST /api/auth/telegram` endpoint with their Telegram user data and device information.
+2. **Web Application Authentication**: The user opens the X Shield web application and initiates the `POST /api/auth/telegram` endpoint with their Telegram user data and device information.
 
 3. **Join Record Verification**: The server verifies that a corresponding `telegram_join_events` record exists for this Telegram user ID. If no record is found, the request is rejected with a 403 status.
 
@@ -223,7 +223,7 @@ Referring now to FIG. 4, the trusted room system allows bulk onboarding from est
 
 2. **Join Detection**: When a user joins a Telegram group that is an active trusted room, the bot checks whether the user's join timestamp precedes the membership cutoff date. If so, the bot marks the join event with a synthetic invite code `trusted::{room_id}` and sends the user a DM notifying them of auto-access.
 
-3. **Authentication Flow**: When the user opens the bchat web application, the `POST /api/auth/telegram` endpoint detects the `trusted::` prefix on the invite code. The server verifies:
+3. **Authentication Flow**: When the user opens the X Shield web application, the `POST /api/auth/telegram` endpoint detects the `trusted::` prefix on the invite code. The server verifies:
    - The referenced trusted room exists and is active
    - The user's join date precedes the membership cutoff
    - The room has not exceeded its member cap (if one is set)
@@ -422,7 +422,7 @@ The cooling period system imposes a 72-hour restriction window when two users fi
 
 ### Section XII: Support Ticket System with Cryptographic Admin Verification
 
-Referring now to FIG. 9, the support ticket system ensures all admin-user interactions occur within the bchat platform with cryptographic identity proof:
+Referring now to FIG. 9, the support ticket system ensures all admin-user interactions occur within the X Shield platform with cryptographic identity proof:
 
 1. **Ticket Lifecycle**: Tickets progress through the following statuses:
    - `pending` — Newly created, awaiting admin assignment
@@ -520,7 +520,7 @@ The system implements a tiered rate limiting architecture to prevent abuse:
    where flagPenalty = min(0.30, unresolvedFlagCount * 0.05).
 
 7. The system of claim 1, further comprising trusted room auto-access wherein:
-   an administrator designates a Telegram group or bchat conversation as a trusted room with a mandatory membership cutoff date;
+   an administrator designates a Telegram group or X Shield conversation as a trusted room with a mandatory membership cutoff date;
    only users whose join timestamp precedes the cutoff date qualify for auto-access;
    qualified users receive a default trust score of 0.40 versus 0.50 for invite-code users;
    the room creator is assigned as the inviter for cascade accountability purposes.
@@ -586,7 +586,7 @@ The system implements a tiered rate limiting architecture to prevent abuse:
 
 ```
 +------------------------------------------------------------------+
-|                        bchat Server (port 8080)                   |
+|                        X Shield Server (port 8080)                   |
 |                                                                   |
 |  +-------------------+    +-------------------+                   |
 |  |   Express API     |    |  WebSocket Relay  |                   |
@@ -647,7 +647,7 @@ Bot chat_member handler records join event
     |-- NO  --> User needs invite code (via /start deep link)
     |
     v
-User opens bchat web app
+User opens X Shield web app
     |
     v
 POST /api/auth/telegram { telegramUser, deviceInfo, inviteCode }
@@ -738,7 +738,7 @@ Bot checks: is group a trusted room? user joined before cutoff?
     NO  --> User needs regular invite code
     |
     v
-User opens bchat, POST /api/auth/telegram
+User opens X Shield, POST /api/auth/telegram
     |
     v
 Auth route detects "trusted::" prefix on invite code
@@ -888,7 +888,7 @@ Pattern cache TTL:           60 seconds
 ```
 SENDING:
 +------------------+                          +------------------+
-|   Sender Client  |                          |   bchat Server   |
+|   Sender Client  |                          |   X Shield Server   |
 +------------------+                          +------------------+
         |                                              |
         |  1. GET /api/messages/keys/:recipientId      |
@@ -917,7 +917,7 @@ SENDING:
 
 RECEIVING:
 +------------------+                          +------------------+
-| Recipient Client |                          |   bchat Server   |
+| Recipient Client |                          |   X Shield Server   |
 +------------------+                          +------------------+
         |                                              |
         |  WebSocket: { type: 'new_message',           |

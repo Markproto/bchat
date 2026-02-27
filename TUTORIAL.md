@@ -1,6 +1,6 @@
-# bchat Complete Tutorial
+# X Shield Complete Tutorial
 
-A step-by-step guide to deploying, configuring, and operating bchat — from Telegram bot setup through AI-powered fraud detection and beyond.
+A step-by-step guide to deploying, configuring, and operating X Shield — from Telegram bot setup through AI-powered fraud detection and beyond.
 
 ---
 
@@ -39,7 +39,7 @@ Create a `.env` file in `server/`:
 # === REQUIRED ===
 
 # PostgreSQL connection string
-DATABASE_URL=postgresql://bchat_user:your_strong_password@localhost:5432/bchat
+DATABASE_URL=postgresql://xshield_user:your_strong_password@localhost:5432/xshield
 
 # JWT signing secret — generate with: openssl rand -hex 32
 JWT_SECRET=your_64_char_hex_secret_here
@@ -67,7 +67,7 @@ cp .env.production.example .env
 docker compose up -d
 ```
 
-This starts both the PostgreSQL database and the bchat server. Migrations run automatically on startup.
+This starts both the PostgreSQL database and the X Shield server. Migrations run automatically on startup.
 
 ### Manual Setup
 
@@ -88,8 +88,8 @@ The server auto-runs all SQL migrations in `server/src/db/migrations/` on first 
 
 1. Open Telegram and search for **@BotFather**
 2. Send `/newbot`
-3. Choose a name: `bchat Security Bot` (or whatever you prefer)
-4. Choose a username: `bchat_security_bot` (must end in `bot`)
+3. Choose a name: `X Shield Security Bot` (or whatever you prefer)
+4. Choose a username: `xshield_security_bot` (must end in `bot`)
 5. BotFather gives you a token like `123456789:ABCdefGHI...` — copy this
 
 ### Step 2: Create Your Channel/Group
@@ -103,7 +103,7 @@ The server auto-runs all SQL migrations in `server/src/db/migrations/` on first 
    - It will show the channel ID (negative number like `-1001234567890`)
    - Remove the helper bot after
 
-### Step 3: Configure bchat
+### Step 3: Configure X Shield
 
 Set these in your `.env`:
 
@@ -123,10 +123,10 @@ User joins Telegram channel
 Bot records join event in telegram_join_events table
     |
     v
-User opens bchat web app
+User opens X Shield web app
     |
     v
-bchat verifies the Telegram identity
+X Shield verifies the Telegram identity
     |
     v
 If join record exists AND name isn't impersonating an admin
@@ -135,7 +135,7 @@ If join record exists AND name isn't impersonating an admin
 Account created -> JWT issued -> user is in
 ```
 
-**Key security property**: Users MUST join via Telegram first. The bot records their join, and the web app verifies it. You can't create a bchat account without a real Telegram identity.
+**Key security property**: Users MUST join via Telegram first. The bot records their join, and the web app verifies it. You can't create an X Shield account without a real Telegram identity.
 
 ### Bot Commands
 
@@ -189,7 +189,7 @@ What happens on the server:
 
 #### Step 3: What "Root of Trust" Means
 
-Every security property in bchat ultimately derives from the Creator's public key:
+Every security property in X Shield ultimately derives from the Creator's public key:
 
 ```
 Creator (root)
@@ -212,13 +212,13 @@ Creator (root)
         Creator's pubkey matches pinned root -> VERIFIED
 ```
 
-This is a **chain of trust** — identical in concept to how HTTPS certificates work (root CA -> intermediate CA -> leaf certificate). The difference is that bchat's chain is visible to users and cryptographically verifiable in real-time.
+This is a **chain of trust** — identical in concept to how HTTPS certificates work (root CA -> intermediate CA -> leaf certificate). The difference is that X Shield's chain is visible to users and cryptographically verifiable in real-time.
 
 ### Why This Matters
 
 **Problem it solves**: In Telegram groups, scammers create accounts like "Admin_Mark" or "Αdmin_Mark" (with a Cyrillic A) and DM victims pretending to be support staff. There's no way to prove who's real.
 
-**bchat's solution**: Every admin has a cryptographic proof chain back to the Creator. Users can click "Verify Admin" on any support ticket and the server walks the ed25519 signature chain. If any link is broken, forged, or revoked — verification fails. A scammer can copy a username but can never forge an ed25519 signature.
+**X Shield's solution**: Every admin has a cryptographic proof chain back to the Creator. Users can click "Verify Admin" on any support ticket and the server walks the ed25519 signature chain. If any link is broken, forged, or revoked — verification fails. A scammer can copy a username but can never forge an ed25519 signature.
 
 ### Security Properties of the Creator Setup
 
@@ -249,7 +249,7 @@ This is the one catastrophic failure mode. The Creator's private key lives in th
 
 ### The Invite Chain
 
-bchat uses a closed invitation system. Every user traces back to whoever invited them:
+X Shield uses a closed invitation system. Every user traces back to whoever invited them:
 
 ```
 Creator
@@ -289,7 +289,7 @@ This creates **accountability**. If User_C turns out to be a scammer:
 
 1. New user receives an invite code from you
 2. They join the Telegram channel (bot records their join)
-3. They open the bchat web app
+3. They open the X Shield web app
 4. Login screen: enter Telegram credentials + invite code
 5. Server checks:
    - Telegram join record exists? (must have joined channel)
@@ -304,16 +304,16 @@ This creates **accountability**. If User_C turns out to be a scammer:
 
 ### What It Is
 
-Trusted rooms let admins designate an existing Telegram group as a "trusted source" for bchat. Members of that group who joined **before a cutoff date** can register on bchat without needing a personal invite code. This is ideal for onboarding established communities where individual invite codes would be impractical.
+Trusted rooms let admins designate an existing Telegram group as a "trusted source" for X Shield. Members of that group who joined **before a cutoff date** can register on X Shield without needing a personal invite code. This is ideal for onboarding established communities where individual invite codes would be impractical.
 
 ### Key Concept: Membership Cutoff Date
 
 When enabling a trusted room, the admin **must** specify a cutoff date. This is critical for security:
 
-- Members who joined the Telegram group **before** the cutoff date → auto-access to bchat
+- Members who joined the Telegram group **before** the cutoff date → auto-access to X Shield
 - Members who joined the Telegram group **after** the cutoff date → must get a regular invite code
 
-This prevents someone from seeing that a Telegram group grants bchat access, joining it after the fact, and getting in without being vetted.
+This prevents someone from seeing that a Telegram group grants X Shield access, joining it after the fact, and getting in without being vetted.
 
 ### How to Enable a Trusted Room
 
@@ -371,11 +371,11 @@ Yes → check user's join date vs cutoff
     v
 Joined BEFORE cutoff?
   Yes → mark join event with trusted::room_id
-        DM user: "You have auto-access to bchat!"
+        DM user: "You have auto-access to X Shield!"
   No  → ignore (user needs a regular invite code)
     |
     v
-User opens bchat app, registers normally
+User opens X Shield app, registers normally
     |
     v
 Auth route detects trusted:: code
@@ -613,7 +613,7 @@ Alert shown to recipient on next load
 
 ### Built-In Detection Patterns
 
-bchat ships with 12 patterns across 5 categories:
+X Shield ships with 12 patterns across 5 categories:
 
 #### Seed Theft (CRITICAL severity)
 - **Seed Phrase Request**: Catches "seed phrase", "recovery words", "mnemonic"
@@ -765,9 +765,9 @@ This backdates the contact pair so the cooling period is instantly expired. Use 
 
 ## 10. End-to-End Encryption
 
-### How E2EE Works in bchat
+### How E2EE Works in X Shield
 
-bchat uses **NaCl box encryption** (X25519 key exchange + XSalsa20-Poly1305 symmetric cipher). This is the same cryptographic primitive used by Signal.
+X Shield uses **NaCl box encryption** (X25519 key exchange + XSalsa20-Poly1305 symmetric cipher). This is the same cryptographic primitive used by Signal.
 
 #### Sending a Message
 
@@ -824,7 +824,7 @@ The ciphertext (which IS stored) cannot be decrypted by the server. This gives y
 
 ### How It Works
 
-All support happens inside bchat — never via Telegram DMs. This prevents the classic "fake admin DMs you" scam.
+All support happens inside X Shield — never via Telegram DMs. This prevents the classic "fake admin DMs you" scam.
 
 #### Creating a Ticket
 
@@ -940,7 +940,7 @@ Shows platform-wide metrics: total users, average trust score, ban count, etc.
 
 ## 13. Future Versatility — Beyond Chat
 
-bchat's architecture is designed to extend far beyond simple messaging. The security primitives — identity verification, trust scoring, cooling periods, and pattern detection — can protect any interaction, not just text chat.
+X Shield's architecture is designed to extend far beyond simple messaging. The security primitives — identity verification, trust scoring, cooling periods, and pattern detection — can protect any interaction, not just text chat.
 
 ### Wallet Activity Monitoring
 
@@ -949,7 +949,7 @@ The scam detection engine currently watches message text. The same pattern-match
 - **Wallet address sharing**: Already detected during cooling periods. Future: cross-reference shared addresses against known scam databases (e.g., ChainAbuse, ScamSniffer)
 - **Transaction proposals**: When users discuss trades, auto-flag if the proposed address has been associated with rug pulls or mixer services
 - **DeFi link verification**: Check shared DeFi URLs against known phishing domains before they're even clickable
-- **On-chain activity correlation**: Link bchat identities to wallet addresses (opt-in) and flag users whose on-chain behavior matches scam patterns (dust attacks, rapid token approvals, drain contracts)
+- **On-chain activity correlation**: Link X Shield identities to wallet addresses (opt-in) and flag users whose on-chain behavior matches scam patterns (dust attacks, rapid token approvals, drain contracts)
 
 ### Real-Time Transaction Screening
 
@@ -982,7 +982,7 @@ The trust engine and scam detection aren't tied to the chat UI. They can wrap:
 - **Voice/video calls**: Trust scores visible during calls; unverified users flagged
 - **File sharing**: Scan filenames and metadata for social engineering (e.g., "wallet_backup.pdf", "recovery_sheet.xlsx")
 - **Group channels**: Apply cooling periods to group joins, not just 1-on-1 contacts
-- **Marketplace/OTC**: If bchat adds P2P trading, the trust engine provides a built-in reputation system
+- **Marketplace/OTC**: If X Shield adds P2P trading, the trust engine provides a built-in reputation system
 
 ### API-First Architecture
 
@@ -990,12 +990,12 @@ Every feature is exposed as a REST API. This means third-party tools can integra
 
 - **Trading bots** can check a counterparty's trust score before executing
 - **DAO governance** can require minimum trust scores for proposal submission
-- **Wallet apps** can query bchat's scam pattern database for address screening
-- **Browser extensions** can check URLs against bchat's phishing patterns
+- **Wallet apps** can query X Shield's scam pattern database for address screening
+- **Browser extensions** can check URLs against X Shield's phishing patterns
 
 ### The Vision
 
-bchat isn't just a chat app — it's a **trust infrastructure layer** for crypto communities. The same cryptographic identity, trust scoring, and scam detection that protects messages today can protect any interaction where one person might try to defraud another.
+X Shield isn't just a chat app — it's a **trust infrastructure layer** for crypto communities. The same cryptographic identity, trust scoring, and scam detection that protects messages today can protect any interaction where one person might try to defraud another.
 
 The patterns you add to catch "send me your seed phrase" today are the same engine that can catch "approve this malicious contract" tomorrow. Every ban, every flag, every trust score adjustment makes the system smarter.
 
