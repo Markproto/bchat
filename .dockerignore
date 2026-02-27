@@ -1,0 +1,11 @@
+# Root .dockerignore (used by deploy/Dockerfile.nginx with context: .)
+server/node_modules
+server/dist
+client/node_modules
+client/dist
+.git
+*.log
+coverage
+.env
+.env.*
+!.env.production.example
