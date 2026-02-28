@@ -23,6 +23,7 @@ import messageRoutes from './routes/messages';
 import supportRoutes from './routes/support';
 import trustedRoomRoutes from './routes/trustedRooms';
 import identityRoutes from './routes/identity';
+import walletRoutes from './routes/wallet';
 import { createBot } from './bot';
 import { rateLimit } from './middleware/rateLimit';
 import { createWebSocketServer, getConnectionCount } from './ws';
@@ -53,6 +54,7 @@ async function main() {
   app.use('/api/support', rateLimit({ points: 20, duration: 60 }), supportRoutes);
   app.use('/api/trusted-rooms', rateLimit({ points: 20, duration: 60 }), trustedRoomRoutes);
   app.use('/api/identity', rateLimit({ points: 30, duration: 60 }), identityRoutes);
+  app.use('/api/wallet', rateLimit({ points: 20, duration: 60 }), walletRoutes);
 
   // Health check
   app.get('/', (_req, res) => {
