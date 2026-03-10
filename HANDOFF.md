@@ -369,28 +369,81 @@ curl https://your-domain.com/health
 
 ---
 
-## 15. Known Gaps / Next Steps
+## 15. Production Deployment Status (March 10, 2026)
+
+| Item | Status | Details |
+|------|--------|---------|
+| **Server** | Live | DigitalOcean 134.199.237.113 |
+| **URL** | https://clouthammer.com | SSL via Let's Encrypt (expires June 8, 2026) |
+| **Password** | admin / clouthammer | Nginx basic auth on SPA; API/WS/health bypass |
+| **Auto-deploy** | Active | GitHub Actions on push to main (SSH to DO) |
+| **GitHub Secrets** | Set | DO_HOST, DO_USERNAME, DO_SSH_KEY |
+| **SSH Access** | Key + password | root@134.199.237.113 |
+| **Docker** | 4 containers | db (postgres:15), server, nginx, certbot |
+| **Server path** | /home/xshield/xshield | Cloned from Markproto/bchat |
+| **Telegram Bot** | Not configured | Set TELEGRAM_BOT_TOKEN in .env |
+| **Demo mode** | Live | Interactive demo accessible from landing page |
+
+### Deploy Process
+Every push to `main` triggers `.github/workflows/deploy.yml` which:
+1. SSHs into DO server as root
+2. `cd /home/xshield/xshield && git pull origin main`
+3. `docker compose build --no-cache`
+4. `docker compose up -d`
+
+### Manual Deploy (if needed)
+```bash
+ssh root@134.199.237.113
+cd /home/xshield/xshield
+git pull origin main
+docker compose build --no-cache
+docker compose up -d
+docker compose ps
+```
+
+### SSL Renewal
+Certbot container auto-renews every 12 hours. For manual re-init:
+```bash
+cd /home/xshield/xshield
+sudo bash deploy/init-letsencrypt.sh
+```
+
+---
+
+## 16. Known Gaps / Next Steps
 
 - **Test coverage** — Jest is configured but no test files exist yet in `src/`. Writing tests should be a priority.
 - **Redis** — Referenced in rate-limit dependencies (`ioredis`, `rate-limit-redis`) but no Redis service in `docker-compose.yml`. Currently falls back to in-memory rate limiting. Add a Redis service for production.
-- **Rebrand complete** — All UI text, package names, Docker references, deploy scripts, nginx config, and database names have been updated from `bchat` to `X Shield` / `xshield`.
+- **Telegram bot** — `TELEGRAM_BOT_TOKEN` not yet set in production .env. Bot features disabled until configured.
 - **Cron jobs** — `npm run cron` exists but no `src/cron/` directory was found. Scheduled job infrastructure may need implementation.
 - **Client E2EE** — `tweetnacl` is in client dependencies for client-side encryption. Verify the React app properly implements the key management and encryption flows.
 
 ---
 
-## 16. Key Files for Onboarding
+## 17. Key Files for Onboarding
 
 If you're a new developer, read these files first:
 
 1. **`PATENT.md`** — Complete technical specification of every subsystem
-2. **`server/src/server.ts`** — Main entry point, see how everything wires together
-3. **`server/src/routes/messages.ts`** — Largest route file, shows E2EE + cooling + scam detection flow
-4. **`server/src/middleware/authenticate.ts`** — How JWT auth works
-5. **`server/src/db/schema.sql`** — Core database tables
-6. **`docker-compose.yml`** — Production service topology
-7. **`deploy/nginx/default.conf`** — How traffic flows from internet to app
+2. **`EXAMINE.md`** — Patent-to-code verification report (99.5% alignment)
+3. **`SETUP_GUIDE.md`** — Start-to-finish deployment guide
+4. **`server/src/server.ts`** — Main entry point, see how everything wires together
+5. **`server/src/routes/messages.ts`** — Largest route file, shows E2EE + cooling + scam detection flow
+6. **`server/src/middleware/authenticate.ts`** — How JWT auth works
+7. **`server/src/db/schema.sql`** — Core database tables
+8. **`docker-compose.yml`** — Production service topology
+9. **`deploy/nginx/default.conf`** — How traffic flows from internet to app
+10. **`client/src/DemoMode.tsx`** — Interactive demo with mock data for all features
 
 ---
 
-*This document was generated from the codebase as of commit `cb0f42a`. The project has been rebranded from bchat to X Shield.*
+## 18. Export Compliance
+
+See `README.md` for full encryption and export classification details:
+- **ECCN:** 5D002 (mass-market encryption)
+- **EAR:** §742.15(b), License Exception ENC §740.17
+- **Algorithms:** Ed25519, Curve25519-XSalsa20-Poly1305, SHA-256/512, HMAC-SHA256, TLS 1.2/1.3
+
+---
+
+*Last updated March 10, 2026. Previous update: commit `cb0f42a` (rebrand from bchat to X Shield).*
