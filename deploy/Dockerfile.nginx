@@ -8,6 +8,8 @@ RUN npm run build
 
 # Stage 2: Nginx with client static files + reverse proxy config
 FROM nginx:alpine
-RUN rm /etc/nginx/conf.d/default.conf
+RUN apk add --no-cache apache2-utils && rm /etc/nginx/conf.d/default.conf
+# Password: clouthammer (matching the URL)
+RUN htpasswd -cb /etc/nginx/.htpasswd admin clouthammer
 COPY --from=client-builder /app/dist /usr/share/nginx/html
 COPY deploy/nginx/default.conf /etc/nginx/conf.d/default.conf
