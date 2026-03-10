@@ -32,7 +32,7 @@ The present invention addresses these shortcomings by providing a messaging plat
 
 The present invention provides a secure messaging platform comprising the following integrated subsystems:
 
-(a) **Identity Generation**: Each user receives a randomly generated ed25519 signing keypair. The private key is produced from 32 cryptographically random bytes via the `@noble/ed25519` library. No mnemonic seed phrases, HD wallet derivation, or BIP39/BIP32 protocols are involved.
+(a) **Identity Generation**: Each user receives a randomly generated ed25519 signing keypair. The private key is produced from 32 cryptographically random bytes via the `@noble/ed25519` library. The database schema includes columns for BIP32-derived wallet addresses (`wallet_address`, `wallet_index`) and the `bip39` library is included as a dependency for future mnemonic-based key recovery, but these features are not yet wired into the active codebase. The primary identity system relies solely on ed25519 keypairs.
 
 (b) **Device Binding**: User accounts are bound to specific devices through software-based fingerprinting. A SHA-256 hash is computed from the concatenation of platform identifier, device model, operating system version, application version, and an optional hardware identifier.
 
@@ -425,10 +425,11 @@ The cooling period system imposes a 72-hour restriction window when two users fi
 Referring now to FIG. 9, the support ticket system ensures all admin-user interactions occur within the X Shield platform with cryptographic identity proof:
 
 1. **Ticket Lifecycle**: Tickets progress through the following statuses:
-   - `pending` — Newly created, awaiting admin assignment
+   - `open` — Newly created (database default), awaiting admin assignment
    - `assigned` — An admin has claimed the ticket
-   - `open` — Active conversation (schema default)
-   - `resolved` — Issue addressed, pending user confirmation
+   - `pending_verification` — Admin verification challenge issued
+   - `verified` — Admin identity cryptographically confirmed
+   - `resolved` — Issue addressed
    - `closed` — Ticket finalized
 
 2. **Ticket Numbering**: Tickets are assigned sequential numbers from a PostgreSQL sequence starting at 1000, providing human-friendly reference numbers.
@@ -479,6 +480,39 @@ The system implements a tiered rate limiting architecture to prevent abuse:
 
 ---
 
+### Section XIV: Additional Security Features (Schema-Provisioned)
+
+The database schema provisions the following additional security features, some of which are fully implemented and others reserved for future activation:
+
+1. **TOTP Two-Factor Authentication**: The `users` table includes `totp_secret` (encrypted TOTP secret) and `totp_enabled` (boolean, default false) columns. When enabled, users must provide a time-based one-time password in addition to their Telegram authentication. The TOTP secret is stored encrypted at rest.
+
+2. **Phone Number Verification**: The `users` table includes `phone_number` and `phone_verified` (boolean, default false) columns, reserved for future secondary identity verification via SMS or voice call. This provides an additional out-of-band verification channel independent of Telegram.
+
+3. **BIP32 Wallet Derivation**: The `users` table includes `wallet_address` and `wallet_index` columns for BIP32-derived wallet addresses from a master extended public key. The `bip39` library (v3.1.0) is included as a server dependency. These columns are provisioned in the schema for future key recovery functionality (deriving the signing key from a 24-word mnemonic) but are not currently wired into the active authentication flow.
+
+4. **Group Conversations**: The `conversations` table supports both direct and group conversations via `is_group` (boolean) and `group_name` fields. The `conversation_members` table tracks membership with join timestamps. Group encryption is supported via a `group_key` column for shared symmetric keys. The current client implementation focuses on direct messaging, with group support available at the infrastructure level.
+
+5. **Identity Route**: An `/api/identity` route (rate-limited to 30 requests per minute) provides endpoints for identity-related operations including pubkey fingerprint lookup and identity color generation.
+
+---
+
+### Section XV: Cryptographic Export Classification
+
+The system employs the following cryptographic algorithms that may be subject to export controls under the U.S. Export Administration Regulations (EAR), ECCN 5D002:
+
+| Algorithm | Use | Key Size | ECCN Relevance |
+|-----------|-----|----------|---------------|
+| Ed25519 | Digital signatures, identity verification | 256-bit | Controlled — exceeds 56-bit threshold |
+| Curve25519-XSalsa20-Poly1305 (NaCl box) | End-to-end message encryption | 256-bit | Controlled — symmetric encryption above 56-bit |
+| SHA-512 | Internal to Ed25519 | 512-bit | Generally exempt (hashing only) |
+| SHA-256 | Device fingerprinting, visual identity | 256-bit | Generally exempt (hashing only) |
+| HMAC-SHA256 | JWT token signing (HS256) | 256-bit | Controlled — used for authentication |
+| TLS 1.2 / TLS 1.3 | Transport encryption | Varies | Mass-market exemption (§740.17) |
+
+As publicly available open source software, this system qualifies for the "publicly available" exclusion under EAR §742.15(b) and License Exception ENC (§740.17), subject to the one-time notification requirement to BIS and NSA per §742.15(b)(2).
+
+---
+
 ## Claims
 
 1. A secure messaging system comprising:
@@ -490,7 +524,7 @@ The system implements a tiered rate limiting architecture to prevent abuse:
 2. The system of claim 1, wherein user onboarding requires:
    a verified Telegram join event recorded by the bot's `chat_member` handler;
    a homoglyph and impersonation check against existing administrator display names;
-   generation of a random ed25519 signing keypair independent of any mnemonic seed phrase or HD wallet derivation;
+   generation of a random ed25519 signing keypair (with BIP39 mnemonic-based key recovery provisioned in the schema for future use);
    generation of a software-based device fingerprint computed as SHA-256 of the concatenation of platform, device model, OS version, application version, and optional hardware identifier.
 
 3. The system of claim 1, wherein device binding uses software-based fingerprinting comprising:
@@ -559,7 +593,7 @@ The system implements a tiered rate limiting architecture to prevent abuse:
     blocked events are logged for administrative analysis.
 
 14. The system of claim 1, further comprising a support ticket system wherein:
-    tickets progress through statuses: pending, assigned, open, resolved, closed;
+    tickets progress through statuses: open (default), assigned, pending_verification, verified, resolved, closed;
     ticket messages use the same NaCl box E2EE as regular messages;
     users can request cryptographic admin identity verification via a challenge-response protocol using a 32-byte random nonce with 5-minute expiry;
     the admin signs the nonce with their ed25519 private key and the server verifies the signature;
@@ -577,6 +611,21 @@ The system implements a tiered rate limiting architecture to prevent abuse:
     per-action limits further restrict message sends (30 per minute), ticket creation (5 per hour), and ban actions (5 per minute).
 
 17. The system of claim 1, wherein the WebSocket relay operates on the same HTTP server via the `upgrade` event in `noServer` mode, authenticating connections via JWT verification during the HTTP upgrade handshake, maintaining a per-user connection registry supporting multiple simultaneous devices, and implementing a 30-second heartbeat cycle for stale connection detection.
+
+18. The system of claim 1, further comprising schema-provisioned TOTP two-factor authentication wherein:
+    a `totp_secret` column stores an encrypted TOTP secret per user;
+    a `totp_enabled` boolean flag controls activation;
+    when enabled, users must provide a time-based one-time password alongside Telegram authentication.
+
+19. The system of claim 1, further comprising schema-provisioned BIP32 wallet derivation wherein:
+    `wallet_address` and `wallet_index` columns are reserved for future BIP32-derived addresses from a master extended public key;
+    the `bip39` library is included for future mnemonic-based key recovery (deriving ed25519 signing keys from a 24-word recovery phrase);
+    these features are provisioned at the database level but not yet active in the authentication flow.
+
+20. The system of claim 1, further comprising group conversation support wherein:
+    the `conversations` table supports both direct and group modes via `is_group` and `group_name` fields;
+    `conversation_members` tracks group membership with join timestamps;
+    a `group_key` column provisions shared symmetric key material for group encryption.
 
 ---
 
@@ -946,7 +995,7 @@ KEY TYPES:
 User creates ticket
     |
     v
-status: 'pending', ticket_number from sequence (starting 1000)
+status: 'open' (default), ticket_number from sequence (starting 1000)
 priority: urgent | high | normal | low
     |
     v

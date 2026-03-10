@@ -75,3 +75,26 @@ Key variables:
 - `DATABASE_URL` — PostgreSQL connection string
 - `JWT_SECRET` — Random secret for token signing
 - `MASTER_MNEMONIC` — BIP39 mnemonic (auto-generated if not set)
+
+## Encryption & Export Notice
+
+This software contains cryptographic functions subject to U.S. Export Administration Regulations (EAR), 15 CFR 730-774, and may be controlled under ECCN 5D002.
+
+### Cryptographic Algorithms Used
+
+| Algorithm | Purpose | Key Size | Library |
+|-----------|---------|----------|---------|
+| Ed25519 | Digital signatures, identity, admin chain of trust | 256-bit | @noble/ed25519 |
+| Curve25519-XSalsa20-Poly1305 (NaCl box) | End-to-end message encryption | 256-bit | tweetnacl |
+| SHA-512 | Internal to Ed25519 signing | 512-bit | Node.js crypto |
+| SHA-256 | Device fingerprinting, pubkey fingerprints | 256-bit | Node.js crypto |
+| HMAC-SHA256 (HS256) | JWT token signing | 256-bit | jsonwebtoken |
+| TLS 1.2 / TLS 1.3 | Transport encryption (HTTPS/WSS) | Varies | Nginx + Let's Encrypt |
+
+### Export Classification
+
+This software is publicly available open source and qualifies for the "publicly available" exclusion under EAR §742.15(b) and License Exception ENC (§740.17). A notification has been filed with the Bureau of Industry and Security (BIS) per §742.15(b)(2).
+
+**This software may not be exported or re-exported to embargoed destinations** (Cuba, Iran, North Korea, Syria, Crimea region) or to persons/entities on the BIS Denied Persons List, Entity List, or Specially Designated Nationals List.
+
+For questions about export compliance, contact the project maintainers.

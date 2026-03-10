@@ -4,6 +4,7 @@ import TeamSpec from "./TeamSpec.tsx";
 import TutorialPopup from "./TutorialPopup.tsx";
 import LandingPage from "./LandingPage.tsx";
 import LoginScreen from "./LoginScreen.tsx";
+import DemoMode from "./DemoMode.tsx";
 import { useAuth } from "./context/AuthContext.tsx";
 import { useWebSocket, type WsEvent, type WsNewMessage } from "./hooks/useWebSocket.ts";
 import { encryptMessage, decryptMessage } from "./crypto/e2ee.ts";
@@ -713,7 +714,7 @@ export default function XShieldApp() {
   const [tab, setTab] = useState("chats");
   const [selChat, setSelChat] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Record<string, Message[]>>(MOCK_MSGS);
-  const [overlay, setOverlay] = useState<"landing" | "login" | "guide" | "spec" | null>("landing");
+  const [overlay, setOverlay] = useState<"landing" | "login" | "guide" | "spec" | "demo" | null>("landing");
   const [showTutorial, setShowTutorial] = useState(false);
   const [trustProfile, setTrustProfile] = useState<TrustProfile | null>(null);
   const [scamAlerts, setScamAlerts] = useState<ScamAlert[]>([]);
@@ -880,6 +881,7 @@ export default function XShieldApp() {
           onOpenGuide={() => setOverlay("guide")}
           onOpenSpec={() => setOverlay("spec")}
           onOpenTutorial={() => setShowTutorial(true)}
+          onOpenDemo={() => setOverlay("demo")}
           onOpenApp={() => {
             // If already logged in, go straight to app. Otherwise, show login.
             if (user) {
@@ -909,6 +911,9 @@ export default function XShieldApp() {
         <TeamSpec onBack={() => setOverlay("landing")} />
       </div>
     );
+  }
+  if (overlay === "demo") {
+    return <DemoMode onExit={() => setOverlay("landing")} />;
   }
 
   // If somehow at main app without auth, redirect to login

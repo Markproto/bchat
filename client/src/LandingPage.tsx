@@ -25,11 +25,12 @@ const LAYERS = [
 ];
 
 // ===================== MAIN COMPONENT =====================
-export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpenTutorial }: {
+export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpenTutorial, onOpenDemo }: {
   onOpenGuide: () => void;
   onOpenSpec: () => void;
   onOpenApp: () => void;
   onOpenTutorial?: () => void;
+  onOpenDemo?: () => void;
 }) {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
@@ -75,6 +76,17 @@ export default function LandingPage({ onOpenGuide, onOpenSpec, onOpenApp, onOpen
           >
             Read the Guide
           </button>
+          {onOpenDemo && (
+            <button
+              onClick={onOpenDemo}
+              style={{
+                padding: "14px 32px", background: "rgba(255,165,2,0.15)", color: T.warn, border: `1px solid ${T.warn}44`,
+                borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 15, fontFamily: "inherit", transition: "all .15s",
+              }}
+            >
+              Try Interactive Demo
+            </button>
+          )}
           {onOpenTutorial && (
             <button
               onClick={onOpenTutorial}
